@@ -24,8 +24,7 @@ remote = origin
 ## Read First
 
 1. `START_HERE.md`
-2. `LOCAL_ONLY_WORKFLOW.md`
-3. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
+2. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
 
 ## Current Baseline
 

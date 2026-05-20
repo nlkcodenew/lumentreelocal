@@ -43,17 +43,44 @@ Public-safe work belongs in:
 
 ## Read Order
 
-1. `LOCAL_ONLY_WORKFLOW.md`
-2. `SESSION_HANDOFF.md`
-3. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
-4. `README.md`
-5. `firmware/README.md`
+1. `SESSION_HANDOFF.md`
+2. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
+3. `README.md`
+4. `firmware/README.md`
 
 ## Push Rules
 
 - For this checkout, `git push` must go to `private`.
 - Do not push this branch to `origin`.
 - Before flashing new firmware, commit here first.
+
+## Private Workflow
+
+This checkout exists to hold runtime assets that must not return to the public
+`main` branch.
+
+Use this checkout for:
+
+- firmware source and local build artifacts needed for production work
+- flash-site source and public firmware files served from this machine
+- local docs, handoff notes, evidence, and operational scripts
+
+Public repo workflow:
+
+1. Keep `/home/mrlinh/esp32-lumentree` on the `local-only` branch.
+2. Commit local runtime changes here before flashing or deploying.
+3. Use `/home/mrlinh/esp32-lumentree-public` as the clean public `main` worktree.
+4. Only make public-safe changes in the public worktree, then commit/push there.
+
+Remote mapping:
+
+1. `private` is the push target for this checkout.
+2. `origin` is the public repo and should not be used from this checkout.
+
+Minimum rule before flashing a new firmware build:
+
+1. Commit the firmware and any related flash-site changes on the local-only branch.
+2. Verify the flash site still serves the expected manifest and binaries.
 
 ## Scope Index
 
