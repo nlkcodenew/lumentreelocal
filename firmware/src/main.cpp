@@ -7,6 +7,7 @@
 #include <BLERemoteService.h>
 #include <BLEScan.h>
 #include <DNSServer.h>
+#include <ESPmDNS.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
 #include <WebServer.h>
@@ -106,7 +107,9 @@ static bool productionEnabled = LUMENTREE_DEFAULT_PRODUCTION_ENABLED != 0;
 static bool tlsInsecure = LUMENTREE_DEFAULT_TLS_INSECURE != 0;
 static bool provisioningPortalActive = false;
 static bool portalServerStarted = false;
+static bool mdnsStarted = false;
 static String provisioningApSsid;
+static String localHostname;
 static esp_ble_addr_type_t targetAddressType = BLE_ADDR_TYPE_PUBLIC;
 static bool targetAddressTypeKnown = false;
 static BLEClient* discoveryClient = nullptr;
@@ -159,6 +162,9 @@ static bool postWritePairingCode(const String& code, String& response);
 static long readPairingTokenExpiresInSeconds();
 static long writePairingCodeExpiresInSeconds();
 static String defaultGatewayId();
+static String defaultLocalHostname();
+static String localPortalUrl();
+static void ensureMdnsStarted();
 static void pollPendingCommand();
 static ModbusReadResult runModbusRead(uint16_t startRegister, uint16_t registerCount, const char* label);
 static ModbusReadResult runModbusReadInput(uint16_t startRegister, uint16_t registerCount, const char* label);
@@ -323,6 +329,7 @@ static void printJson(JsonDocument& doc) {
 
 static void loadConfig() {
   prefs.begin("lumentree", false);
+  localHostname = defaultLocalHostname();
   wifiSsid = prefs.getString("wifi_ssid", LUMENTREE_DEFAULT_WIFI_SSID);
   wifiPassword = prefs.getString("wifi_pass", LUMENTREE_DEFAULT_WIFI_PASSWORD);
   apiUrl = prefs.getString("api_url", LUMENTREE_DEFAULT_API_URL);
@@ -356,6 +363,8 @@ static void emitConfig(const char* type) {
   doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
   doc["wifi_ssid"] = wifiSsid.length() > 0 ? wifiSsid : "";
   doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "";
+  doc["local_hostname"] = localHostname;
+  doc["local_url"] = WiFi.status() == WL_CONNECTED ? localPortalUrl() : "";
   doc["api_url"] = apiUrl;
   doc["api_token_configured"] = apiToken.length() > 0;
   doc["device_id"] = deviceId;
@@ -396,6 +405,8 @@ static void emitStatus(const char* type) {
   doc["wifi_mode"] = productionEnabled ? "production_upload" : "manual";
   doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
   doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "";
+  doc["local_hostname"] = localHostname;
+  doc["local_url"] = WiFi.status() == WL_CONNECTED ? localPortalUrl() : "";
   doc["api_url"] = apiUrl;
   doc["api_token_configured"] = apiToken.length() > 0;
   doc["device_id"] = deviceId;
@@ -447,6 +458,35 @@ static String defaultGatewayId() {
   char buffer[40];
   snprintf(buffer, sizeof(buffer), "esp32-lumentree-%06llx", (unsigned long long)(chipId & 0xFFFFFF));
   return String(buffer);
+}
+
+static String defaultLocalHostname() {
+  uint64_t chipId = ESP.getEfuseMac();
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "lumentree-%04llx", (unsigned long long)(chipId & 0xFFFF));
+  return String(buffer);
+}
+
+static String localPortalUrl() {
+  return "http://" + localHostname + ".local";
+}
+
+static void ensureMdnsStarted() {
+  if (WiFi.status() != WL_CONNECTED || localHostname.length() == 0) return;
+  if (mdnsStarted) return;
+  if (!MDNS.begin(localHostname.c_str())) {
+    emitError("mdns_start_failed", "could not start mDNS responder");
+    return;
+  }
+  MDNS.addService("http", "tcp", 80);
+  mdnsStarted = true;
+
+  JsonDocument doc;
+  doc["type"] = "mdns_started";
+  doc["uptime_ms"] = millis() - bootMs;
+  doc["hostname"] = localHostname;
+  doc["local_url"] = localPortalUrl();
+  printJson(doc);
 }
 
 static String generatePairingToken() {
@@ -504,7 +544,12 @@ static void sendPortalPage() {
   );
   if (provisioningPortalActive) {
     page += F(
-      "<p>First-time onboarding mode. Enter Wi-Fi only. After the ESP32 joins Wi-Fi, reopen this portal on the local network to scan BLE and generate Home Assistant pairing tokens.</p>"
+      "<p>First-time onboarding mode. Enter Wi-Fi only. After the ESP32 joins Wi-Fi, reopen this portal on the local network using the canonical URL shown below. If .local resolution fails on your network, use the router DHCP client list to find the ESP32 IP.</p>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Next Step</h2><p>After reboot, open <b>"
+    );
+    page += htmlEscape(localPortalUrl());
+    page += F(
+      "</b></p></section>"
       "<section><div class='actions'><button type='button' onclick='scan()'>Scan Wi-Fi</button></div><div id='nets'></div></section>"
       "<section><form onsubmit='saveWifi(event)'><label>Wi-Fi SSID</label><input id='ssid' name='ssid' value='"
     );
@@ -514,23 +559,28 @@ static void sendPortalPage() {
     );
   } else {
     page += F(
-      "<p>Local network mode. Scan nearby inverters, choose the intended device, then generate the required read token and optional write token for Home Assistant.</p>"
+      "<p>Local network mode. Use the canonical local URL shown below. Scan nearby inverters, choose the intended device, then generate the required read token and optional write token for Home Assistant.</p>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Local URL</h2><p><b>"
+    );
+    page += htmlEscape(localPortalUrl());
+    page += F(
+      "</b><br><span style='color:#8da0ad'>IP is only a fallback if .local does not resolve on your network.</span></p></section>"
       "<section><div class='actions'><button type='button' onclick='bleScan()'>Scan BLE</button><button type='button' class='secondary' onclick='status()'>Refresh Status</button></div><div id='summary'></div></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>BLE Candidates</h2><div id='ble'></div></section>"
-      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Read Access</h2><p>Home Assistant setup now requires a read pairing token.</p><button type='button' onclick='readToken()'>Generate read pairing token</button><div id='read'></div></section>"
-      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Write Access</h2><p>Write remains optional. Only generate a write token when Home Assistant should be allowed to change inverter settings.</p><button type='button' onclick='writeCode()'>Generate write pairing token</button><div id='write'></div></section>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Read Access</h2><p>Home Assistant setup now requires a read pairing token. Tokens use uppercase letters for display, but they are not case-sensitive.</p><button type='button' onclick='readToken()'>Generate read pairing token</button><div id='read'></div></section>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Write Access</h2><p>Write remains optional. Only generate a write token when Home Assistant should be allowed to change inverter settings. Tokens use uppercase letters for display, but they are not case-sensitive.</p><button type='button' onclick='writeCode()'>Generate write pairing token</button><div id='write'></div></section>"
     );
   }
   page += F(
     "<pre id='out'></pre><script>"
     "function q(id){return document.getElementById(id)}"
     "function scan(){fetch('/api/scan').then(r=>r.json()).then(d=>{let n=q('nets');if(!n)return;n.innerHTML=(d.networks||[]).map(x=>`<div class=net onclick=\\\"q('ssid').value='${x.ssid.replace(/'/g,'&#39;')}'\\\">${x.ssid}<small>${x.rssi} dBm ${x.secure?'locked':'open'}</small></div>`).join('')||'<div class=net>No networks</div>'})}"
-    "function renderSummary(d){let s=q('summary');if(!s)return;s.innerHTML=`<p>Gateway: <b>${d.gateway_id||'unknown'}</b><br>Wi-Fi: <b>${d.wifi_connected?'connected':'disconnected'}</b><br>IP: <b>${d.ip||'n/a'}</b><br>Device ID: <b>${d.device_id||'unbound'}</b><br>Target MAC: <b>${d.target_mac||'unbound'}</b><br>Pairing: <b>${d.pairing_status||'unknown'}</b></p>`}"
+    "function renderSummary(d){let s=q('summary');if(!s)return;s.innerHTML=`<p>Gateway: <b>${d.gateway_id||'unknown'}</b><br>Local URL: <b>${d.local_url||'n/a'}</b><br>Wi-Fi: <b>${d.wifi_connected?'connected':'disconnected'}</b><br>IP fallback: <b>${d.ip||'n/a'}</b><br>Device ID: <b>${d.device_id||'unbound'}</b><br>Target MAC: <b>${d.target_mac||'unbound'}</b><br>Pairing: <b>${d.pairing_status||'unknown'}</b></p>`}"
     "function esc(v){return String(v||'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[m]))}"
     "function renderBle(d){let b=q('ble');if(!b)return;let list=d.candidates||[];b.innerHTML=list.map((x,i)=>`<div class=net><b>${esc(x.name||x.mac)}</b><small>${esc(x.mac)} address_type=${x.address_type}</small><small>${x.rssi} dBm score ${x.score||0}</small><button type='button' onclick='selectCandidateByIndex(${i})'>Use This Device</button></div>`).join('')||'<div class=net>No candidates yet</div>'}"
     "function selectCandidateByIndex(index){fetch('/api/status').then(r=>r.json()).then(d=>{let list=d.candidates||[];if(index<0||index>=list.length){throw new Error('candidate index out of range')}let x=list[index];return selectCandidate(x.name||'',x.mac||'',x.address_type||0)})}"
-    "function renderRead(d){let r=q('read');if(!r)return;if(!d.read_pairing_token_active){r.innerHTML='<p>No active read pairing token.</p>';return}if(d.read_pairing_token){r.innerHTML=`<p class=\\\"token\\\">${d.read_pairing_token}</p><p>Expires in ${d.read_pairing_token_expires_in_seconds}s. Enter this together with Device ID in Home Assistant.</p>`}else{r.innerHTML=`<p>Read pairing token active. Expires in ${d.read_pairing_token_expires_in_seconds}s.</p>`}}"
-    "function renderWrite(d){let w=q('write');if(!w)return;if(!d.write_pairing_code_active){w.innerHTML='<p>No active write pairing token.</p>';return}if(d.write_pairing_code){w.innerHTML=`<p class=\\\"token\\\">${d.write_pairing_code}</p><p>Expires in ${d.write_pairing_code_expires_in_seconds}s. Optional for Home Assistant write access.</p>`}else{w.innerHTML=`<p>Write pairing token active. Expires in ${d.write_pairing_code_expires_in_seconds}s.</p>`}}"
+    "function renderRead(d){let r=q('read');if(!r)return;if(!d.read_pairing_token_active){r.innerHTML='<p>No active read pairing token.</p>';return}if(d.read_pairing_token){r.innerHTML=`<p class=\\\"token\\\">${d.read_pairing_token}</p><p>Expires in ${d.read_pairing_token_expires_in_seconds}s. Enter this together with Device ID in Home Assistant. Uppercase is shown for clarity, but the token is not case-sensitive.</p>`}else{r.innerHTML=`<p>Read pairing token active. Expires in ${d.read_pairing_token_expires_in_seconds}s.</p>`}}"
+    "function renderWrite(d){let w=q('write');if(!w)return;if(!d.write_pairing_code_active){w.innerHTML='<p>No active write pairing token.</p>';return}if(d.write_pairing_code){w.innerHTML=`<p class=\\\"token\\\">${d.write_pairing_code}</p><p>Expires in ${d.write_pairing_code_expires_in_seconds}s. Optional for Home Assistant write access. Uppercase is shown for clarity, but the token is not case-sensitive.</p>`}else{w.innerHTML=`<p>Write pairing token active. Expires in ${d.write_pairing_code_expires_in_seconds}s.</p>`}}"
     "function bleScan(){q('out').textContent='Scanning BLE...';fetch('/api/ble_scan',{method:'POST'}).then(r=>r.json()).then(d=>{renderSummary(d);renderBle(d);q('out').textContent=JSON.stringify(d,null,2)})}"
     "function selectCandidate(deviceId,mac,addressType){q('out').textContent='Binding selected candidate...';fetch('/api/select_candidate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId,mac:mac,address_type:addressType})}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);status()})}"
     "function readToken(){q('out').textContent='Generating read pairing token...';fetch('/api/read_token',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderRead(d)})}"
@@ -558,6 +608,8 @@ static void setupProvisioningWebServer() {
     doc["wifi_configured"] = wifiSsid.length() > 0;
     doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
     doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+    doc["local_hostname"] = localHostname;
+    doc["local_url"] = localPortalUrl();
     doc["rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
     doc["api_url"] = apiUrl;
     doc["api_token_configured"] = apiToken.length() > 0;
@@ -740,7 +792,14 @@ static void setupProvisioningWebServer() {
     productionEnabled = true;
     prefs.putBool("prod", productionEnabled);
 
-    server.send(200, "application/json", "{\"ok\":true,\"rebooting\":true}");
+    JsonDocument result;
+    result["ok"] = true;
+    result["rebooting"] = true;
+    result["local_hostname"] = localHostname;
+    result["local_url"] = localPortalUrl();
+    String body;
+    serializeJson(result, body);
+    server.send(200, "application/json", body);
     delay(500);
     ESP.restart();
   });
@@ -812,6 +871,7 @@ static bool ensureWifiConnected() {
 
   WiFi.mode(WIFI_STA);
   esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+  WiFi.setHostname(localHostname.c_str());
   WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
 
   unsigned long deadline = millis() + WIFI_CONNECT_TIMEOUT_MS;
@@ -835,8 +895,11 @@ static bool ensureWifiConnected() {
   done["uptime_ms"] = millis() - bootMs;
   done["ssid"] = wifiSsid;
   done["ip"] = WiFi.localIP().toString();
+  done["local_hostname"] = localHostname;
+  done["local_url"] = localPortalUrl();
   done["rssi"] = WiFi.RSSI();
   printJson(done);
+  ensureMdnsStarted();
   stopProvisioningPortal();
   return true;
 }

@@ -38,6 +38,31 @@ class FakeApp:
         }
 
 
+class FakePairingApp:
+    """Minimal app for read pairing fallback tests."""
+
+    def __init__(self):
+        self.token = "server-secret"
+        self.created = []
+        self.claimed = []
+
+    def create_read_pairing_token(self, gateway_id: str, payload: dict):
+        if gateway_id != "esp32-lumentree":
+            raise ValueError("bad gateway")
+        if payload["device_id"] != "P240819130":
+            raise ValueError("bad device")
+        if payload["mac"] != "d8:13:2a:ee:58:d6":
+            raise ValueError("bad mac")
+        self.created.append((gateway_id, payload))
+        return {"ok": True, "read_pairing_token": {"id": 1}, "grant_token": None}
+
+    def claim_read_grant(self, device_id: str, payload: dict):
+        if device_id != "P240819130" or payload.get("token", "").upper() != "PAIR1234":
+            raise ValueError("bad claim")
+        self.claimed.append((device_id, payload))
+        return {"ok": True, "grant_token": "read-secret", "read_grant": {"id": 1}}
+
+
 def _request(method: str, path: str, *, headers: dict[str, str] | None = None, body: dict | None = None):
     app = FakeApp(token="server-secret")
     handler = make_handler(app)
@@ -75,3 +100,48 @@ def test_latest_allows_read_grant():
     assert status == 200, body
     assert body["device_id"] == "P240819130"
     assert body["metrics"]["battery_soc"] == 70
+
+
+def test_read_pairing_and_claim_endpoints_exist():
+    app = FakePairingApp()
+    handler = make_handler(app)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        conn = HTTPConnection("127.0.0.1", httpd.server_port, timeout=5)
+        conn.request(
+            "POST",
+            "/api/lumentree/gateways/esp32-lumentree/read-pairing-token",
+            body=json.dumps(
+                {
+                    "device_id": "P240819130",
+                    "mac": "d8:13:2a:ee:58:d6",
+                    "token": "PAIR1234",
+                }
+            ),
+            headers={"Content-Type": "application/json", "Authorization": "Bearer server-secret"},
+        )
+        response = conn.getresponse()
+        body = json.loads(response.read().decode("utf-8"))
+        assert response.status == 201, body
+        assert body["ok"] is True
+        conn.close()
+
+        conn = HTTPConnection("127.0.0.1", httpd.server_port, timeout=5)
+        conn.request(
+            "POST",
+            "/api/lumentree/devices/P240819130/read-grants/claim",
+            body=json.dumps({"token": "pair1234"}),
+            headers={"Content-Type": "application/json"},
+        )
+        response = conn.getresponse()
+        body = json.loads(response.read().decode("utf-8"))
+        assert response.status == 201, body
+        assert body["grant_token"] == "read-secret"
+        conn.close()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+        time.sleep(0.05)

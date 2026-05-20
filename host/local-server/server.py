@@ -406,12 +406,16 @@ def sha256_hex(value: str) -> str:
   return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def normalize_pairing_secret(value: str) -> str:
+  return value.strip().upper()
+
+
 def scoped_code_hash(gateway_id: str, device_id: str, code: str) -> str:
-  return sha256_hex(f"write-code:{gateway_id}:{device_id}:{code.strip()}")
+  return sha256_hex(f"write-code:{gateway_id}:{device_id}:{normalize_pairing_secret(code)}")
 
 
 def scoped_read_token_hash(gateway_id: str, device_id: str, mac: str, token: str) -> str:
-  return sha256_hex(f"read-token:{gateway_id}:{device_id}:{mac.lower()}:{token.strip()}")
+  return sha256_hex(f"read-token:{gateway_id}:{device_id}:{mac.lower()}:{normalize_pairing_secret(token)}")
 
 
 def token_hash(token: str) -> str:
@@ -880,6 +884,32 @@ class LumentreeServer:
         )
         return cur.fetchone()
 
+  def current_gateway_binding(self, gateway_id: str, device_id: str) -> dict[str, Any] | None:
+    with self.connect() as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          """
+          SELECT gateway_id, device_id, target_mac, pairing_status, wifi_connected, updated_at
+          FROM lumentree_gateway_status
+          WHERE gateway_id = %s
+            AND device_id = %s
+            AND updated_at > NOW() - interval '5 minutes'
+          LIMIT 1
+          """,
+          (gateway_id, device_id),
+        )
+        row = cur.fetchone()
+    if row is None:
+      return None
+    target_mac = str(row.get("target_mac") or "").strip().lower()
+    if not target_mac:
+      return None
+    if row.get("pairing_status") not in {"paired", "multiple_candidates", "scanning_no_candidate"}:
+      return None
+    if row.get("wifi_connected") is False:
+      return None
+    return row
+
   def audit_write_event(
     self,
     cur: Any,
@@ -930,11 +960,16 @@ class LumentreeServer:
       raise ValueError("token is required")
     device_id = device_id.strip()
     mac = mac.strip().lower()
-    token = token.strip()
+    token = normalize_pairing_secret(token)
 
     candidate = self.latest_gateway_candidate(gateway_id, device_id)
-    if candidate is None or str(candidate.get("mac") or "").lower() != mac:
-      raise ValueError("gateway candidate for device_id and mac was not found")
+    if candidate is not None and str(candidate.get("mac") or "").lower() == mac:
+      binding_ok = True
+    else:
+      binding = self.current_gateway_binding(gateway_id, device_id)
+      binding_ok = binding is not None and str(binding.get("target_mac") or "").lower() == mac
+    if not binding_ok:
+      raise ValueError("gateway candidate or current gateway binding for device_id and mac was not found")
 
     expires_at = utc_now() + timedelta(seconds=READ_PAIRING_TOKEN_TTL_SECONDS)
     with self.connect() as conn:
@@ -998,7 +1033,7 @@ class LumentreeServer:
     if not isinstance(code, str) or not code.strip():
       raise ValueError("code is required")
     device_id = device_id.strip()
-    code = code.strip().upper()
+    code = normalize_pairing_secret(code)
     if len(code) < 6 or len(code) > 16 or not code.isalnum():
       raise ValueError("code must be 6 to 16 alphanumeric characters")
 
@@ -1058,7 +1093,7 @@ class LumentreeServer:
     code = payload.get("code")
     if not isinstance(code, str) or not code.strip():
       raise ValueError("code is required")
-    code = code.strip().upper()
+    code = normalize_pairing_secret(code)
 
     with self.connect() as conn:
       with conn.cursor() as cur:
@@ -1206,7 +1241,7 @@ class LumentreeServer:
     token = payload.get("token")
     if not isinstance(token, str) or not token.strip():
       raise ValueError("token is required")
-    token = token.strip()
+    token = normalize_pairing_secret(token)
 
     with self.connect() as conn:
       with conn.cursor() as cur:
@@ -1240,17 +1275,7 @@ class LumentreeServer:
           conn.commit()
           raise ValueError("invalid or expired read pairing token")
 
-        cur.execute(
-          """
-          SELECT gateway_id, device_id, updated_at, wifi_connected
-          FROM lumentree_gateway_status
-          WHERE gateway_id = %s
-            AND device_id = %s
-            AND updated_at > NOW() - interval '5 minutes'
-          """,
-          (matched["gateway_id"], device_id),
-        )
-        gateway_row = cur.fetchone()
+        gateway_row = self.current_gateway_binding(matched["gateway_id"], device_id)
         if gateway_row is None:
           self.audit_auth_event(
             cur,
@@ -1264,7 +1289,9 @@ class LumentreeServer:
           raise ValueError("gateway is not online for this Device ID")
 
         candidate = self.latest_gateway_candidate(matched["gateway_id"], device_id)
-        if candidate is None or str(candidate.get("mac") or "").lower() != str(matched["mac"]).lower():
+        candidate_mac_matches = candidate is not None and str(candidate.get("mac") or "").lower() == str(matched["mac"]).lower()
+        gateway_mac_matches = str(gateway_row.get("target_mac") or "").lower() == str(matched["mac"]).lower()
+        if not candidate_mac_matches and not gateway_mac_matches:
           self.audit_auth_event(
             cur,
             "read_grant_claim_failed",
