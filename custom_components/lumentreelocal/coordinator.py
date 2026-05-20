@@ -8,7 +8,12 @@ from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import LumentreeLocalApiClient, LumentreeLocalApiError, LumentreeLocalNotFoundError
+from .api import (
+    LumentreeLocalAuthError,
+    LumentreeLocalApiClient,
+    LumentreeLocalApiError,
+    LumentreeLocalNotFoundError,
+)
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LOGGER
 
 
@@ -44,7 +49,10 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             latest["energy"] = await self.client.energy(self.device_id)
             latest["health"] = await self.client.device_health(self.device_id)
             latest["write_grant"] = await self.client.write_grant_status(self.device_id)
-            latest["command_status"] = await self.client.command_status(self.device_id)
+            try:
+                latest["command_status"] = await self.client.command_status(self.device_id)
+            except LumentreeLocalAuthError:
+                latest["command_status"] = {"device_id": self.device_id, "has_command": False, "last_command": None}
             try:
                 latest["settings"] = await self.client.settings(self.device_id)
             except LumentreeLocalNotFoundError:
