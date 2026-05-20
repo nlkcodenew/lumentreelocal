@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="860" viewBox="0 0 1200 860" role="img" aria-labelledby="title desc">
+  <title id="title">Home Assistant setup flow</title>
+  <desc id="desc">Detailed Home Assistant setup flow for the Lumentree Local integration.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fbff; }
+      .card { fill: #ffffff; stroke: #d8e2ef; stroke-width: 2; rx: 22; ry: 22; }
+      .title { fill: #102a43; font: 700 38px 'Arial', sans-serif; }
+      .subtitle { fill: #627d98; font: 400 20px 'Arial', sans-serif; }
+      .bubble { fill: #e0f2fe; }
+      .bubble2 { fill: #ede9fe; }
+      .bubble3 { fill: #dcfce7; }
+      .n { fill: #0f172a; font: 700 26px 'Arial', sans-serif; }
+      .h { fill: #1f2937; font: 700 24px 'Arial', sans-serif; }
+      .b { fill: #334155; font: 400 19px 'Arial', sans-serif; }
+      .s { fill: #64748b; font: 400 17px 'Arial', sans-serif; }
+      .arrow { stroke: #93a4b8; stroke-width: 6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="860"/>
+  <text class="title" x="70" y="78">Home Assistant Setup Flow</text>
+  <text class="subtitle" x="70" y="112">What the user does in HACS and in the Lumentree Local config flow after the ESP32 portal is ready.</text>
+
+  <rect class="card" x="70" y="165" width="500" height="150"/>
+  <rect class="bubble" x="96" y="191" width="58" height="40" rx="20"/>
+  <text class="n" x="117" y="219">1</text>
+  <text class="h" x="180" y="218">Install or update with HACS</text>
+  <text class="b" x="96" y="260">Install Lumentree Local from the HACS custom repository.</text>
+  <text class="b" x="96" y="288">Restart Home Assistant after the install or update completes.</text>
+
+  <rect class="card" x="630" y="165" width="500" height="150"/>
+  <rect class="bubble" x="656" y="191" width="58" height="40" rx="20"/>
+  <text class="n" x="677" y="219">2</text>
+  <text class="h" x="740" y="218">Add integration</text>
+  <text class="b" x="656" y="260">Settings -> Devices &amp; services -> Add Integration</text>
+  <text class="b" x="656" y="288">Search for Lumentree Local and open the setup form.</text>
+
+  <path class="arrow" d="M570 240 L610 240"/>
+  <polygon fill="#93a4b8" points="610,240 592,229 592,251"/>
+
+  <rect class="card" x="70" y="360" width="500" height="190"/>
+  <rect class="bubble2" x="96" y="386" width="58" height="40" rx="20"/>
+  <text class="n" x="117" y="414">3</text>
+  <text class="h" x="180" y="413">Enter required fields</text>
+  <text class="b" x="96" y="456">Required: Device ID</text>
+  <text class="b" x="96" y="486">Required: read pairing token</text>
+  <text class="b" x="96" y="516">Optional: write pairing token</text>
+  <text class="s" x="96" y="544">Tokens may be typed in uppercase or lowercase.</text>
+
+  <rect class="card" x="630" y="360" width="500" height="190"/>
+  <rect class="bubble2" x="656" y="386" width="58" height="40" rx="20"/>
+  <text class="n" x="677" y="414">4</text>
+  <text class="h" x="740" y="413">Server validates claim</text>
+  <text class="b" x="656" y="456">The server checks the ESP32 gateway, Device ID, and inverter binding.</text>
+  <text class="b" x="656" y="486">If the read token is valid, Home Assistant receives a read grant.</text>
+  <text class="b" x="656" y="516">If the write token is valid too, Home Assistant also receives a write grant.</text>
+
+  <path class="arrow" d="M570 455 L610 455"/>
+  <polygon fill="#93a4b8" points="610,455 592,444 592,466"/>
+
+  <rect class="card" x="70" y="600" width="500" height="170"/>
+  <rect class="bubble3" x="96" y="626" width="58" height="40" rx="20"/>
+  <text class="n" x="117" y="654">5</text>
+  <text class="h" x="180" y="653">Read-only result</text>
+  <text class="b" x="96" y="696">If only the read token is provided, telemetry and diagnostics work normally.</text>
+  <text class="b" x="96" y="724">Direct inverter write entities stay unavailable.</text>
+
+  <rect class="card" x="630" y="600" width="500" height="170"/>
+  <rect class="bubble3" x="656" y="626" width="58" height="40" rx="20"/>
+  <text class="n" x="677" y="654">6</text>
+  <text class="h" x="740" y="653">Write-capable result</text>
+  <text class="b" x="656" y="696">If a valid write token is also provided, guarded write entities can be enabled.</text>
+  <text class="b" x="656" y="724">This should only be used when direct inverter control is intended.</text>
+
+  <path class="arrow" d="M570 680 L610 680"/>
+  <polygon fill="#93a4b8" points="610,680 592,669 592,691"/>
+</svg>

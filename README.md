@@ -78,6 +78,8 @@ Then:
 4. Install the integration
 5. Restart Home Assistant
 
+![First-time setup overview](assets/readme/onboarding-overview.svg)
+
 ## First-Time Onboarding Flow
 
 ### Step 1: Flash The ESP32
@@ -126,6 +128,8 @@ In the ESP32 portal you should be able to:
 - generate a `read pairing token`
 - optionally generate a `write pairing token`
 
+![ESP32 portal flow](assets/readme/esp32-portal-flow.svg)
+
 ### Step 4: Scan BLE And Select The Correct Inverter
 
 From the ESP32 portal:
@@ -171,6 +175,8 @@ Behavior:
 - if the read token is valid, Home Assistant claims a `read grant`
 - if the write token is also valid, Home Assistant claims a `write grant`
 - if the write token is omitted, the integration stays read-only
+
+![Home Assistant setup flow](assets/readme/home-assistant-setup.svg)
 
 ## Updating An Existing Installation
 
@@ -311,6 +317,8 @@ No.
 
 This public repository is intentionally limited to the Home Assistant integration and HACS release surface.
 
+![Security model](assets/readme/security-model.svg)
+
 ## Repository Layout
 
 - `custom_components/lumentreelocal/`: Home Assistant integration code
@@ -401,6 +409,8 @@ Sau đó:
 4. cài integration
 5. restart Home Assistant
 
+![Tổng quan onboarding](assets/readme/onboarding-overview.svg)
+
 ## Quy Trình Onboarding Lần Đầu
 
 ### Bước 1: Flash ESP32
@@ -449,6 +459,8 @@ Trong portal của ESP32 anh có thể:
 - tạo `read pairing token`
 - tùy chọn tạo `write pairing token`
 
+![Flow portal ESP32](assets/readme/esp32-portal-flow.svg)
+
 ### Bước 4: Scan BLE Và Chọn Đúng Biến Tần
 
 Trong web local của ESP32:
@@ -494,6 +506,8 @@ Hành vi:
 - nếu read token hợp lệ, Home Assistant sẽ claim `read grant`
 - nếu write token cũng hợp lệ, Home Assistant sẽ claim thêm `write grant`
 - nếu bỏ trống write token thì integration sẽ chạy ở chế độ chỉ đọc
+
+![Flow setup Home Assistant](assets/readme/home-assistant-setup.svg)
 
 ## Cập Nhật Bản Đang Dùng
 
@@ -633,6 +647,8 @@ Flow bảo vệ hiện tại được thiết kế để `Device ID` một mình
 Không.
 
 Repo public này cố ý chỉ chứa integration Home Assistant và bề mặt release cho HACS.
+
+![Mô hình bảo mật](assets/readme/security-model.svg)
 
 ## Cấu Trúc Repo
 

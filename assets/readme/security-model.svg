@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-labelledby="title desc">
+  <title id="title">Lumentree Local security model</title>
+  <desc id="desc">Diagram showing that the server mediates between ESP32 and Home Assistant and that Device ID alone is not enough for protected read access.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 24; ry: 24; }
+      .title { fill: #0f172a; font: 700 38px 'Arial', sans-serif; }
+      .subtitle { fill: #64748b; font: 400 20px 'Arial', sans-serif; }
+      .head { fill: #1e293b; font: 700 24px 'Arial', sans-serif; }
+      .body { fill: #334155; font: 400 19px 'Arial', sans-serif; }
+      .small { fill: #64748b; font: 400 17px 'Arial', sans-serif; }
+      .good { fill: #dcfce7; }
+      .warn { fill: #fee2e2; }
+      .mid { fill: #e0f2fe; }
+      .arrow { stroke: #64748b; stroke-width: 6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="780"/>
+  <text class="title" x="70" y="78">Current Security Model</text>
+  <text class="subtitle" x="70" y="112">The ESP32 and Home Assistant do not trust each other directly. The API server mediates claim, read access, and optional write access.</text>
+
+  <rect class="box" x="70" y="180" width="300" height="260"/>
+  <rect class="mid" x="96" y="206" width="120" height="36" rx="18"/>
+  <text class="head" x="96" y="287">ESP32 bridge</text>
+  <text class="body" x="96" y="327">Uploads telemetry</text>
+  <text class="body" x="96" y="357">Reports gateway status</text>
+  <text class="body" x="96" y="387">Registers read and write pairing tokens</text>
+  <text class="small" x="96" y="423">ESP32 uses the backend server API token.</text>
+
+  <rect class="box" x="450" y="140" width="300" height="340"/>
+  <rect class="good" x="476" y="166" width="150" height="36" rx="18"/>
+  <text class="head" x="476" y="247">API server</text>
+  <text class="body" x="476" y="287">Binds gateway_id + Device ID + MAC</text>
+  <text class="body" x="476" y="317">Validates read pairing token claims</text>
+  <text class="body" x="476" y="347">Validates write pairing token claims</text>
+  <text class="body" x="476" y="377">Issues long-lived read and write grants</text>
+  <text class="small" x="476" y="423">Protected read endpoints now require a grant or the server token.</text>
+
+  <rect class="box" x="830" y="180" width="300" height="260"/>
+  <rect class="mid" x="856" y="206" width="180" height="36" rx="18"/>
+  <text class="head" x="856" y="287">Home Assistant</text>
+  <text class="body" x="856" y="327">Claims read access with Device ID + read token</text>
+  <text class="body" x="856" y="357">Optionally claims write access with write token</text>
+  <text class="body" x="856" y="387">Uses grant tokens for normal polling and writes</text>
+  <text class="small" x="856" y="423">Home Assistant does not need the backend server master token.</text>
+
+  <path class="arrow" d="M370 310 L430 310"/>
+  <polygon fill="#64748b" points="430,310 412,299 412,321"/>
+  <path class="arrow" d="M750 310 L810 310"/>
+  <polygon fill="#64748b" points="810,310 792,299 792,321"/>
+
+  <rect class="box" x="70" y="530" width="1060" height="165"/>
+  <rect class="warn" x="96" y="556" width="270" height="36" rx="18"/>
+  <text class="head" x="96" y="636">What Device ID alone does not do</text>
+  <text class="body" x="96" y="601">Device ID alone is no longer enough for protected read access to normal device endpoints.</text>
+  <text class="body" x="96" y="664">A new user still needs a valid read pairing token from the ESP32 local portal.</text>
+  <text class="body" x="620" y="601">Write access remains separate and optional.</text>
+  <text class="body" x="620" y="633">The server can reject claims when the gateway is offline, mismatched, or expired.</text>
+  <text class="body" x="620" y="665">Result: normal telemetry is protected, and direct inverter control needs an additional grant.</text>
+</svg>

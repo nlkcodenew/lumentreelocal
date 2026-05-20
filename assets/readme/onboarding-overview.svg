@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">Lumentree Local onboarding overview</title>
+  <desc id="desc">High-level setup flow from ESP32 flashing to Home Assistant pairing and normal telemetry polling.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f6f8fb; }
+      .card { fill: #ffffff; stroke: #d9e2ec; stroke-width: 2; rx: 22; ry: 22; }
+      .step { fill: #0f172a; font: 700 28px 'Arial', sans-serif; }
+      .title { fill: #0f172a; font: 700 38px 'Arial', sans-serif; }
+      .subtitle { fill: #486581; font: 400 20px 'Arial', sans-serif; }
+      .label { fill: #102a43; font: 700 24px 'Arial', sans-serif; }
+      .body { fill: #334e68; font: 400 19px 'Arial', sans-serif; }
+      .small { fill: #627d98; font: 400 17px 'Arial', sans-serif; }
+      .pillBlue { fill: #d9eafc; }
+      .pillGreen { fill: #d9f99d; }
+      .pillAmber { fill: #fde68a; }
+      .pillSlate { fill: #e2e8f0; }
+      .arrow { stroke: #7aa5d2; stroke-width: 6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="900"/>
+  <text class="title" x="70" y="78">Lumentree Local: First-Time Setup Overview</text>
+  <text class="subtitle" x="70" y="112">Recommended path for a new user: ESP32 Wi-Fi onboarding, BLE selection, token claim, then Home Assistant polling.</text>
+
+  <rect class="card" x="70" y="170" width="470" height="170"/>
+  <rect class="pillBlue" x="95" y="194" width="66" height="42" rx="21"/>
+  <text class="step" x="116" y="224">1</text>
+  <text class="label" x="185" y="220">Flash ESP32 bridge firmware</text>
+  <text class="body" x="95" y="268">Use the matching ESP32 firmware for the Lumentree bridge.</text>
+  <text class="body" x="95" y="298">This public repo is only the Home Assistant integration.</text>
+
+  <rect class="card" x="660" y="170" width="470" height="170"/>
+  <rect class="pillBlue" x="685" y="194" width="66" height="42" rx="21"/>
+  <text class="step" x="706" y="224">2</text>
+  <text class="label" x="775" y="220">Join Wi-Fi in AP mode</text>
+  <text class="body" x="685" y="268">Connect to the ESP32 temporary AP and enter only Wi-Fi credentials.</text>
+  <text class="body" x="685" y="298">After reboot, AP mode turns off and the ESP32 joins your LAN.</text>
+
+  <path class="arrow" d="M540 255 L640 255"/>
+  <polygon fill="#7aa5d2" points="640,255 622,244 622,266"/>
+
+  <rect class="card" x="70" y="395" width="470" height="190"/>
+  <rect class="pillGreen" x="95" y="420" width="66" height="42" rx="21"/>
+  <text class="step" x="116" y="450">3</text>
+  <text class="label" x="185" y="446">Open the ESP32 local portal</text>
+  <text class="body" x="95" y="494">Preferred URL: <tspan font-weight="700">http://lumentree-xxxx.local</tspan></text>
+  <text class="body" x="95" y="524">If .local does not resolve, use the ESP32 LAN IP from your router.</text>
+  <text class="small" x="95" y="560">The portal is where the user scans BLE, selects the inverter, and creates pairing tokens.</text>
+
+  <rect class="card" x="660" y="395" width="470" height="190"/>
+  <rect class="pillGreen" x="685" y="420" width="66" height="42" rx="21"/>
+  <text class="step" x="706" y="450">4</text>
+  <text class="label" x="775" y="446">Scan BLE and choose inverter</text>
+  <text class="body" x="685" y="494">Run BLE scan in the portal and select the correct inverter candidate.</text>
+  <text class="body" x="685" y="524">The Device ID entered later in Home Assistant must match this choice.</text>
+  <text class="small" x="685" y="560">If more than one inverter exists, this is the step that decides the binding.</text>
+
+  <path class="arrow" d="M540 490 L640 490"/>
+  <polygon fill="#7aa5d2" points="640,490 622,479 622,501"/>
+
+  <rect class="card" x="70" y="640" width="470" height="190"/>
+  <rect class="pillAmber" x="95" y="665" width="66" height="42" rx="21"/>
+  <text class="step" x="116" y="695">5</text>
+  <text class="label" x="185" y="691">Generate pairing tokens</text>
+  <text class="body" x="95" y="739">Create a required <tspan font-weight="700">read pairing token</tspan>.</text>
+  <text class="body" x="95" y="769">Optionally create a <tspan font-weight="700">write pairing token</tspan> for guarded direct changes.</text>
+  <text class="small" x="95" y="805">Tokens are shown in uppercase for clarity, but they are not case-sensitive.</text>
+
+  <rect class="card" x="660" y="640" width="470" height="190"/>
+  <rect class="pillAmber" x="685" y="665" width="66" height="42" rx="21"/>
+  <text class="step" x="706" y="695">6</text>
+  <text class="label" x="775" y="691">Add integration in Home Assistant</text>
+  <text class="body" x="685" y="739">Enter Device ID and the read token. Add the write token only if needed.</text>
+  <text class="body" x="685" y="769">Home Assistant claims long-lived grant tokens and starts normal polling.</text>
+  <text class="small" x="685" y="805">Without a valid read token, setup is rejected.</text>
+
+  <path class="arrow" d="M540 735 L640 735"/>
+  <polygon fill="#7aa5d2" points="640,735 622,724 622,746"/>
+
+  <rect class="pillSlate" x="70" y="845" width="1060" height="32" rx="16"/>
+  <text class="small" x="93" y="866">Result: Home Assistant reads telemetry through a read grant. Write access remains separate and optional.</text>
+</svg>

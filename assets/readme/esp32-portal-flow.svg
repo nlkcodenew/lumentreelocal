@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">ESP32 local portal flow</title>
+  <desc id="desc">Detailed ESP32 local portal flow from AP mode to BLE scan and token generation.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fffdf8; }
+      .frame { fill: #ffffff; stroke: #e5e7eb; stroke-width: 2; rx: 22; ry: 22; }
+      .title { fill: #111827; font: 700 38px 'Arial', sans-serif; }
+      .subtitle { fill: #6b7280; font: 400 20px 'Arial', sans-serif; }
+      .tag { fill: #fee2e2; }
+      .tag2 { fill: #dbeafe; }
+      .tag3 { fill: #dcfce7; }
+      .tag4 { fill: #fef3c7; }
+      .num { fill: #7c2d12; font: 700 26px 'Arial', sans-serif; }
+      .head { fill: #1f2937; font: 700 24px 'Arial', sans-serif; }
+      .body { fill: #374151; font: 400 19px 'Arial', sans-serif; }
+      .small { fill: #6b7280; font: 400 17px 'Arial', sans-serif; }
+      .arrow { stroke: #9ca3af; stroke-width: 6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="900"/>
+  <text class="title" x="70" y="78">ESP32 Local Portal Flow</text>
+  <text class="subtitle" x="70" y="112">Everything the new user needs to do on the ESP32 side before Home Assistant setup.</text>
+
+  <rect class="frame" x="70" y="160" width="500" height="145"/>
+  <rect class="tag" x="96" y="186" width="58" height="40" rx="20"/>
+  <text class="num" x="117" y="214">1</text>
+  <text class="head" x="180" y="213">AP mode: Wi-Fi only</text>
+  <text class="body" x="96" y="256">Connect to the ESP32 AP and open the setup page.</text>
+  <text class="body" x="96" y="284">Enter only SSID and password, then save and reboot.</text>
+
+  <rect class="frame" x="630" y="160" width="500" height="145"/>
+  <rect class="tag2" x="656" y="186" width="58" height="40" rx="20"/>
+  <text class="num" x="677" y="214">2</text>
+  <text class="head" x="740" y="213">Open LAN portal</text>
+  <text class="body" x="656" y="256">After reboot, use the local URL shown by the ESP32.</text>
+  <text class="body" x="656" y="284">Preferred form: http://lumentree-xxxx.local</text>
+
+  <path class="arrow" d="M570 232 L610 232"/>
+  <polygon fill="#9ca3af" points="610,232 592,221 592,243"/>
+
+  <rect class="frame" x="70" y="360" width="500" height="155"/>
+  <rect class="tag3" x="96" y="386" width="58" height="40" rx="20"/>
+  <text class="num" x="117" y="414">3</text>
+  <text class="head" x="180" y="413">Run BLE scan</text>
+  <text class="body" x="96" y="456">Scan nearby devices from the portal.</text>
+  <text class="body" x="96" y="484">Review candidates by Device ID, MAC, RSSI, and address type.</text>
+
+  <rect class="frame" x="630" y="360" width="500" height="155"/>
+  <rect class="tag3" x="656" y="386" width="58" height="40" rx="20"/>
+  <text class="num" x="677" y="414">4</text>
+  <text class="head" x="740" y="413">Select the intended inverter</text>
+  <text class="body" x="656" y="456">Pick the inverter you want this ESP32 to own.</text>
+  <text class="body" x="656" y="484">This decides the bridge binding used later by Home Assistant.</text>
+
+  <path class="arrow" d="M570 437 L610 437"/>
+  <polygon fill="#9ca3af" points="610,437 592,426 592,448"/>
+
+  <rect class="frame" x="70" y="570" width="500" height="175"/>
+  <rect class="tag4" x="96" y="596" width="58" height="40" rx="20"/>
+  <text class="num" x="117" y="624">5</text>
+  <text class="head" x="180" y="623">Generate read pairing token</text>
+  <text class="body" x="96" y="666">This token is required for the first Home Assistant setup.</text>
+  <text class="body" x="96" y="694">Shown in uppercase, but accepted case-insensitively.</text>
+  <text class="small" x="96" y="726">If it expires, just generate another one from the portal.</text>
+
+  <rect class="frame" x="630" y="570" width="500" height="175"/>
+  <rect class="tag4" x="656" y="596" width="58" height="40" rx="20"/>
+  <text class="num" x="677" y="624">6</text>
+  <text class="head" x="740" y="623">Optionally generate write pairing token</text>
+  <text class="body" x="656" y="666">Only do this when Home Assistant should change inverter settings.</text>
+  <text class="body" x="656" y="694">Without it, the integration stays read-only.</text>
+  <text class="small" x="656" y="726">Write access is intentionally a separate grant.</text>
+
+  <path class="arrow" d="M570 657 L610 657"/>
+  <polygon fill="#9ca3af" points="610,657 592,646 592,668"/>
+
+  <rect class="frame" x="70" y="790" width="1060" height="60"/>
+  <text class="body" x="96" y="828">Portal checklist: Wi-Fi connected, local URL reachable, correct inverter selected, read token generated, optional write token generated.</text>
+</svg>
