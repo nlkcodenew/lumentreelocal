@@ -5,7 +5,7 @@ Every new session must read this file first.
 Global entrypoint for new sessions:
 
 ```text
-/home/mrlinh/LUMENTREE_START_HERE.md
+/home/mrlinh/esp32-lumentree/LUMENTREE_START_HERE.md
 ```
 
 This checkout is:
