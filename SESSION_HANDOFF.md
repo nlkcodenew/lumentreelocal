@@ -25,11 +25,11 @@ remote = origin
 
 1. `START_HERE.md`
 2. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
-3. `docs/specs/2026-05-20-multi-user-read-claim-spec.md` if the next session
+3. `docs/status/2026-05-20-read-write-token-claim-implementation-status.md`
+4. `docs/specs/2026-05-20-multi-user-read-claim-spec.md` if the next session
    discusses shared-server or multi-user access control
-4. `docs/specs/2026-05-20-read-write-token-claim-flow-spec.md` if the next
-   session discusses the chosen replacement for AP-portal API token entry and
-   grant-based read/write onboarding
+5. `docs/specs/2026-05-20-read-write-token-claim-flow-spec.md` for the chosen
+   AP-Wi-Fi-only + LAN-portal token onboarding design
 
 ## Current Baseline
 
@@ -38,13 +38,21 @@ remote = origin
 - Local API bind: `127.0.0.1:8787`
 - Flash site local bind: `127.0.0.1:8790`
 - Home Assistant domain: `lumentreelocal`
-- Current production decision: keep the existing simple read flow for now;
-  multi-user read protection is deferred and recorded in
+- Read auth is now live:
+  - normal device read endpoints require server token or scoped read/write
+    grant
+  - unauthenticated `/api/lumentree/devices/{device_id}/latest` now returns
+    `401`
+- Current onboarding direction is implemented in private runtime:
+  - AP mode is Wi-Fi-only onboarding
+  - LAN portal generates required read token and optional write token
+  - HASS claims `read_grant`/`write_grant` with `Device ID`
+- Multi-user hardening beyond this remains deferred and recorded in
   `docs/specs/2026-05-20-multi-user-read-claim-spec.md`
-- Chosen future auth direction: AP mode should become Wi-Fi-only onboarding,
-  LAN portal should generate required read token and optional write token, and
-  HASS should claim `read_grant`/`write_grant` with `Device ID`; see
-  `docs/specs/2026-05-20-read-write-token-claim-flow-spec.md`
+- Ownership reset caveat:
+  - do not delete rows from `lumentree_devices` to unlink a device
+  - deleting that row still cascades historical telemetry and energy data
+  - current safe reset scope is grants/tokens/candidates only
 
 ## Operational Rule
 

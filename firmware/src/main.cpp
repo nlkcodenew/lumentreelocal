@@ -35,7 +35,7 @@
 #define LUMENTREE_DEFAULT_API_TOKEN ""
 #endif
 #ifndef LUMENTREE_DEFAULT_DEVICE_ID
-#define LUMENTREE_DEFAULT_DEVICE_ID "P240819130"
+#define LUMENTREE_DEFAULT_DEVICE_ID ""
 #endif
 #ifndef LUMENTREE_DEFAULT_TARGET_MAC
 #define LUMENTREE_DEFAULT_TARGET_MAC ""
@@ -105,6 +105,7 @@ static bool candidateOnly = false;
 static bool productionEnabled = LUMENTREE_DEFAULT_PRODUCTION_ENABLED != 0;
 static bool tlsInsecure = LUMENTREE_DEFAULT_TLS_INSECURE != 0;
 static bool provisioningPortalActive = false;
+static bool portalServerStarted = false;
 static String provisioningApSsid;
 static esp_ble_addr_type_t targetAddressType = BLE_ADDR_TYPE_PUBLIC;
 static bool targetAddressTypeKnown = false;
@@ -124,6 +125,8 @@ static uint16_t modbusNotifyCount = 0;
 static std::string modbusResponseBytes;
 static String writePairingCode;
 static unsigned long writePairingCodeExpiresMs = 0;
+static String readPairingToken;
+static unsigned long readPairingTokenExpiresMs = 0;
 
 struct ModbusReadResult {
   bool ok = false;
@@ -149,9 +152,13 @@ static String pairingStatus = "unconfigured";
 
 static void addCandidatesJson(JsonArray array);
 static bool runBleDiscovery(bool allowAutoBind);
+static bool postGatewayCandidates();
 static bool postGatewayStatus(const char* reason);
+static bool postReadPairingToken(const String& token, String& response);
 static bool postWritePairingCode(const String& code, String& response);
+static long readPairingTokenExpiresInSeconds();
 static long writePairingCodeExpiresInSeconds();
+static String defaultGatewayId();
 static void pollPendingCommand();
 static ModbusReadResult runModbusRead(uint16_t startRegister, uint16_t registerCount, const char* label);
 static ModbusReadResult runModbusReadInput(uint16_t startRegister, uint16_t registerCount, const char* label);
@@ -322,6 +329,9 @@ static void loadConfig() {
   apiToken = prefs.getString("api_token", LUMENTREE_DEFAULT_API_TOKEN);
   deviceId = prefs.getString("device_id", LUMENTREE_DEFAULT_DEVICE_ID);
   gatewayId = prefs.getString("gateway_id", LUMENTREE_DEFAULT_GATEWAY_ID);
+  if (gatewayId.length() == 0) {
+    gatewayId = defaultGatewayId();
+  }
   targetMac = normalizeMac(prefs.getString("target_mac", LUMENTREE_DEFAULT_TARGET_MAC));
   uploadIntervalSeconds = prefs.getUShort("upload_s", DEFAULT_UPLOAD_INTERVAL_SECONDS);
   productionEnabled = prefs.getBool("prod", LUMENTREE_DEFAULT_PRODUCTION_ENABLED != 0);
@@ -357,6 +367,8 @@ static void emitConfig(const char* type) {
   doc["tls_insecure"] = tlsInsecure;
   doc["provisioning_portal_active"] = provisioningPortalActive;
   doc["provisioning_ap_ssid"] = provisioningApSsid;
+  doc["read_pairing_token_active"] = readPairingTokenExpiresInSeconds() > 0;
+  doc["read_pairing_token_expires_in_seconds"] = readPairingTokenExpiresInSeconds();
   doc["write_pairing_code_active"] = writePairingCodeExpiresInSeconds() > 0;
   doc["write_pairing_code_expires_in_seconds"] = writePairingCodeExpiresInSeconds();
   printJson(doc);
@@ -392,6 +404,8 @@ static void emitStatus(const char* type) {
   doc["production_enabled"] = productionEnabled;
   doc["provisioning_portal_active"] = provisioningPortalActive;
   doc["provisioning_ap_ssid"] = provisioningApSsid;
+  doc["read_pairing_token_active"] = readPairingTokenExpiresInSeconds() > 0;
+  doc["read_pairing_token_expires_in_seconds"] = readPairingTokenExpiresInSeconds();
   doc["write_pairing_code_active"] = writePairingCodeExpiresInSeconds() > 0;
   doc["write_pairing_code_expires_in_seconds"] = writePairingCodeExpiresInSeconds();
   printJson(doc);
@@ -428,13 +442,36 @@ static String htmlEscape(const String& text) {
   return out;
 }
 
-static String generateWritePairingCode() {
-  String code;
-  code.reserve(8);
+static String defaultGatewayId() {
+  uint64_t chipId = ESP.getEfuseMac();
+  char buffer[40];
+  snprintf(buffer, sizeof(buffer), "esp32-lumentree-%06llx", (unsigned long long)(chipId & 0xFFFFFF));
+  return String(buffer);
+}
+
+static String generatePairingToken() {
+  static const char alphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  String token;
+  token.reserve(8);
   for (int i = 0; i < 8; i++) {
-    code += char('0' + (esp_random() % 10));
+    token += alphabet[esp_random() % (sizeof(alphabet) - 1)];
   }
-  return code;
+  return token;
+}
+
+static String generateReadPairingToken() {
+  return generatePairingToken();
+}
+
+static String generateWritePairingCode() {
+  return generatePairingToken();
+}
+
+static long readPairingTokenExpiresInSeconds() {
+  if (readPairingToken.length() == 0 || readPairingTokenExpiresMs == 0) return 0;
+  long remaining = (long)(readPairingTokenExpiresMs - millis());
+  if (remaining <= 0) return 0;
+  return remaining / 1000;
 }
 
 static long writePairingCodeExpiresInSeconds() {
@@ -450,81 +487,63 @@ static void sendPortalPage() {
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
     "<title>Lumentree Local</title><style>"
     "body{font-family:Arial,sans-serif;margin:0;background:#101820;color:#e8edf2}"
-    "main{max-width:520px;margin:0 auto;padding:20px}"
+    "main{max-width:640px;margin:0 auto;padding:20px}"
     "h1{font-size:22px;margin:10px 0 4px;color:#61d394}"
     "p{color:#a7b4bf;font-size:14px;line-height:1.45}"
     "label{display:block;margin-top:14px;font-size:13px;color:#b9c6cf}"
     "input{width:100%;box-sizing:border-box;padding:11px;margin-top:5px;border:1px solid #314454;border-radius:8px;background:#0a1118;color:#fff;font-size:15px}"
-    "button{margin-top:16px;padding:11px 14px;border:0;border-radius:8px;background:#61d394;color:#07100b;font-weight:700;font-size:15px}"
-    "button.secondary{background:#263746;color:#d8e2ea;margin-left:8px}"
-    "#nets{margin-top:10px;border:1px solid #263746;border-radius:8px;overflow:hidden;display:none}"
-    ".net{padding:10px;border-bottom:1px solid #263746;cursor:pointer}.net:last-child{border-bottom:0}.net small{color:#8da0ad;float:right}"
-    ".row{display:flex;align-items:center;gap:8px}.row input[type=checkbox]{width:auto}"
-    "</style></head><body><main>"
-    "<h1>Lumentree Local</h1>"
-    "<p>Configure Wi-Fi and production upload. Credentials are stored only in ESP32 NVS.</p>"
-    "<div><button type='button' onclick='scan()'>Scan Wi-Fi</button><button class='secondary' type='button' onclick='bleScan()'>Scan BLE</button><button class='secondary' type='button' onclick='status()'>Status</button></div>"
-    "<div id='nets'></div>"
-    "<div id='ble'></div>"
-    "<section style='margin-top:18px;padding:12px;border:1px solid #263746;border-radius:8px;background:#0b141d'>"
-    "<h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Write Access</h2>"
-    "<p>Read-only telemetry does not need write access. Generate a one-time code only when Home Assistant asks for write authorization.</p>"
-    "<button type='button' onclick='writeCode()'>Generate write pairing code</button><div id='write'></div></section>"
-    "<form onsubmit='save(event)'>"
-    "<label>Wi-Fi SSID</label><input id='ssid' name='ssid' value='"
+    "button{margin-top:12px;padding:11px 14px;border:0;border-radius:8px;background:#61d394;color:#07100b;font-weight:700;font-size:15px;cursor:pointer}"
+    "button.secondary{background:#263746;color:#d8e2ea}"
+    ".actions{display:flex;gap:10px;flex-wrap:wrap}"
+    ".net{padding:10px;border-bottom:1px solid #263746}.net:last-child{border-bottom:0}"
+    ".net small{display:block;color:#8da0ad;margin-top:3px}"
+    ".token{font-size:24px;color:#61d394;letter-spacing:2px;font-weight:700}"
+    "pre{white-space:pre-wrap;background:#0a1118;border:1px solid #263746;padding:12px;border-radius:8px;margin-top:18px;color:#c8d6df;font-size:12px}"
+    "section{background:#12202b;border:1px solid #203241;border-radius:12px;padding:16px;margin-top:16px}"
+    "</style></head><body><main><h1>Lumentree Local</h1>"
   );
-  page += htmlEscape(wifiSsid);
+  if (provisioningPortalActive) {
+    page += F(
+      "<p>First-time onboarding mode. Enter Wi-Fi only. After the ESP32 joins Wi-Fi, reopen this portal on the local network to scan BLE and generate Home Assistant pairing tokens.</p>"
+      "<section><div class='actions'><button type='button' onclick='scan()'>Scan Wi-Fi</button></div><div id='nets'></div></section>"
+      "<section><form onsubmit='saveWifi(event)'><label>Wi-Fi SSID</label><input id='ssid' name='ssid' value='"
+    );
+    page += htmlEscape(wifiSsid);
+    page += F(
+      "' required><label>Wi-Fi Password</label><input id='pass' name='password' type='password' placeholder='Leave blank to keep current password'><button type='submit'>Save Wi-Fi & Reboot</button></form></section>"
+    );
+  } else {
+    page += F(
+      "<p>Local network mode. Scan nearby inverters, choose the intended device, then generate the required read token and optional write token for Home Assistant.</p>"
+      "<section><div class='actions'><button type='button' onclick='bleScan()'>Scan BLE</button><button type='button' class='secondary' onclick='status()'>Refresh Status</button></div><div id='summary'></div></section>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>BLE Candidates</h2><div id='ble'></div></section>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Read Access</h2><p>Home Assistant setup now requires a read pairing token.</p><button type='button' onclick='readToken()'>Generate read pairing token</button><div id='read'></div></section>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Write Access</h2><p>Write remains optional. Only generate a write token when Home Assistant should be allowed to change inverter settings.</p><button type='button' onclick='writeCode()'>Generate write pairing token</button><div id='write'></div></section>"
+    );
+  }
   page += F(
-    "' required>"
-    "<label>Wi-Fi Password</label><input id='pass' name='password' type='password' placeholder='Leave blank to keep current password'>"
-    "<label>API URL</label><input id='api_url' name='api_url' value='"
-  );
-  page += htmlEscape(apiUrl);
-  page += F(
-    "' required>"
-    "<label>API Token</label><input id='api_token' name='api_token' type='password' placeholder='Leave blank to keep current token'>"
-    "<label>Device ID</label><input id='device_id' name='device_id' value='"
-  );
-  page += htmlEscape(deviceId);
-  page += F(
-    "' required>"
-    "<label>Target BLE MAC</label><input id='target_mac' name='target_mac' value='"
-  );
-  page += htmlEscape(targetMac);
-  page += F(
-    "'>"
-    "<label>Gateway ID</label><input id='gateway_id' name='gateway_id' value='"
-  );
-  page += htmlEscape(gatewayId);
-  page += F(
-    "' required>"
-    "<label>Upload interval seconds</label><input id='upload_interval' name='upload_interval' type='number' min='5' max='3600' value='"
-  );
-  page += String(uploadIntervalSeconds);
-  page += F(
-    "'>"
-    "<label class='row'><input id='production' name='production' type='checkbox' "
-  );
-  if (productionEnabled) page += "checked";
-  page += F(
-    "> Enable production upload</label>"
-    "<button type='submit'>Save & Reboot</button>"
-    "</form><pre id='out'></pre>"
-    "<script>"
+    "<pre id='out'></pre><script>"
     "function q(id){return document.getElementById(id)}"
-    "function scan(){fetch('/api/scan').then(r=>r.json()).then(d=>{let n=q('nets');n.style.display='block';n.innerHTML=d.networks.map(x=>`<div class=net onclick=\"q('ssid').value='${x.ssid.replace(/'/g,'&#39;')}'\">${x.ssid}<small>${x.rssi} dBm ${x.secure?'locked':'open'}</small></div>`).join('')||'<div class=net>No networks</div>'})}"
-    "function renderBle(d){let b=q('ble');let list=d.candidates||[];b.innerHTML='<p>Pairing: '+(d.pairing_status||'unknown')+'</p>'+list.map(x=>`<div class=net onclick=\"q('target_mac').value='${x.mac}'\"><b>${x.name||x.mac}</b><small>${x.rssi} dBm score ${x.score}</small><br><span style='color:#8da0ad'>${x.mac}</span></div>`).join('')}"
-    "function renderWrite(d){let w=q('write');if(!d.write_pairing_code_active){w.innerHTML='<p>No active write pairing code.</p>';return}if(d.write_pairing_code){w.innerHTML=`<p><b style=\"font-size:24px;color:#61d394;letter-spacing:2px\">${d.write_pairing_code}</b></p><p>Expires in ${d.write_pairing_code_expires_in_seconds}s. Enter this code in Home Assistant Lumentree Local options.</p>`}else{w.innerHTML=`<p>Write pairing code is active and expires in ${d.write_pairing_code_expires_in_seconds}s.</p>`}}"
-    "function bleScan(){q('out').textContent='Scanning BLE...';fetch('/api/ble_scan',{method:'POST'}).then(r=>r.json()).then(d=>{renderBle(d);q('out').textContent=JSON.stringify(d,null,2)})}"
-    "function status(){fetch('/api/status').then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderBle(d);renderWrite(d)})}"
-    "function writeCode(){q('out').textContent='Generating write pairing code...';fetch('/api/write_code',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderWrite(d)})}"
-    "function save(e){e.preventDefault();let data={ssid:q('ssid').value,password:q('pass').value,api_url:q('api_url').value,api_token:q('api_token').value,device_id:q('device_id').value,target_mac:q('target_mac').value,gateway_id:q('gateway_id').value,upload_interval:parseInt(q('upload_interval').value||'15'),production:q('production').checked};fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);setTimeout(()=>location.reload(),4000)})}"
+    "function scan(){fetch('/api/scan').then(r=>r.json()).then(d=>{let n=q('nets');if(!n)return;n.innerHTML=(d.networks||[]).map(x=>`<div class=net onclick=\\\"q('ssid').value='${x.ssid.replace(/'/g,'&#39;')}'\\\">${x.ssid}<small>${x.rssi} dBm ${x.secure?'locked':'open'}</small></div>`).join('')||'<div class=net>No networks</div>'})}"
+    "function renderSummary(d){let s=q('summary');if(!s)return;s.innerHTML=`<p>Gateway: <b>${d.gateway_id||'unknown'}</b><br>Wi-Fi: <b>${d.wifi_connected?'connected':'disconnected'}</b><br>IP: <b>${d.ip||'n/a'}</b><br>Device ID: <b>${d.device_id||'unbound'}</b><br>Target MAC: <b>${d.target_mac||'unbound'}</b><br>Pairing: <b>${d.pairing_status||'unknown'}</b></p>`}"
+    "function esc(v){return String(v||'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[m]))}"
+    "function renderBle(d){let b=q('ble');if(!b)return;let list=d.candidates||[];b.innerHTML=list.map((x,i)=>`<div class=net><b>${esc(x.name||x.mac)}</b><small>${esc(x.mac)} address_type=${x.address_type}</small><small>${x.rssi} dBm score ${x.score||0}</small><button type='button' onclick='selectCandidateByIndex(${i})'>Use This Device</button></div>`).join('')||'<div class=net>No candidates yet</div>'}"
+    "function selectCandidateByIndex(index){fetch('/api/status').then(r=>r.json()).then(d=>{let list=d.candidates||[];if(index<0||index>=list.length){throw new Error('candidate index out of range')}let x=list[index];return selectCandidate(x.name||'',x.mac||'',x.address_type||0)})}"
+    "function renderRead(d){let r=q('read');if(!r)return;if(!d.read_pairing_token_active){r.innerHTML='<p>No active read pairing token.</p>';return}if(d.read_pairing_token){r.innerHTML=`<p class=\\\"token\\\">${d.read_pairing_token}</p><p>Expires in ${d.read_pairing_token_expires_in_seconds}s. Enter this together with Device ID in Home Assistant.</p>`}else{r.innerHTML=`<p>Read pairing token active. Expires in ${d.read_pairing_token_expires_in_seconds}s.</p>`}}"
+    "function renderWrite(d){let w=q('write');if(!w)return;if(!d.write_pairing_code_active){w.innerHTML='<p>No active write pairing token.</p>';return}if(d.write_pairing_code){w.innerHTML=`<p class=\\\"token\\\">${d.write_pairing_code}</p><p>Expires in ${d.write_pairing_code_expires_in_seconds}s. Optional for Home Assistant write access.</p>`}else{w.innerHTML=`<p>Write pairing token active. Expires in ${d.write_pairing_code_expires_in_seconds}s.</p>`}}"
+    "function bleScan(){q('out').textContent='Scanning BLE...';fetch('/api/ble_scan',{method:'POST'}).then(r=>r.json()).then(d=>{renderSummary(d);renderBle(d);q('out').textContent=JSON.stringify(d,null,2)})}"
+    "function selectCandidate(deviceId,mac,addressType){q('out').textContent='Binding selected candidate...';fetch('/api/select_candidate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId,mac:mac,address_type:addressType})}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);status()})}"
+    "function readToken(){q('out').textContent='Generating read pairing token...';fetch('/api/read_token',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderRead(d)})}"
+    "function writeCode(){q('out').textContent='Generating write pairing token...';fetch('/api/write_code',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderWrite(d)})}"
+    "function saveWifi(e){e.preventDefault();let data={ssid:q('ssid').value,password:q('pass').value};fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)})}"
+    "function status(){fetch('/api/status').then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderSummary(d);renderBle(d);renderRead(d);renderWrite(d)})}"
     "status();</script></main></body></html>"
   );
   server.send(200, "text/html; charset=utf-8", page);
 }
 
 static void setupProvisioningWebServer() {
+  if (portalServerStarted) return;
   server.on("/", HTTP_GET, sendPortalPage);
   server.on("/generate_204", HTTP_GET, sendPortalPage);
   server.on("/fwlink", HTTP_GET, sendPortalPage);
@@ -547,6 +566,8 @@ static void setupProvisioningWebServer() {
     doc["target_mac"] = targetMac;
     doc["pairing_status"] = pairingStatus;
     doc["candidate_count"] = bleCandidates.size();
+    doc["read_pairing_token_active"] = readPairingTokenExpiresInSeconds() > 0;
+    doc["read_pairing_token_expires_in_seconds"] = readPairingTokenExpiresInSeconds();
     doc["write_pairing_code_active"] = writePairingCodeExpiresInSeconds() > 0;
     doc["write_pairing_code_expires_in_seconds"] = writePairingCodeExpiresInSeconds();
     JsonArray candidates = doc["candidates"].to<JsonArray>();
@@ -590,6 +611,38 @@ static void setupProvisioningWebServer() {
     server.send(200, "application/json", body);
   });
 
+  server.on("/api/read_token", HTTP_POST, []() {
+    if (apiUrl.length() == 0 || apiToken.length() == 0 || gatewayId.length() == 0 || deviceId.length() == 0 || targetMac.length() == 0) {
+      server.send(400, "application/json", "{\"ok\":false,\"error\":\"gateway_id, device_id, target_mac, api_url, and api_token are required\"}");
+      return;
+    }
+    String token = generateReadPairingToken();
+    String response;
+    if (!postReadPairingToken(token, response)) {
+      JsonDocument doc;
+      doc["ok"] = false;
+      doc["error"] = "failed to register read pairing token with API";
+      doc["response"] = response.substring(0, 300);
+      String body;
+      serializeJson(doc, body);
+      server.send(502, "application/json", body);
+      return;
+    }
+    readPairingToken = token;
+    readPairingTokenExpiresMs = millis() + WRITE_PAIRING_CODE_TTL_MS;
+    JsonDocument doc;
+    doc["ok"] = true;
+    doc["device_id"] = deviceId;
+    doc["gateway_id"] = gatewayId;
+    doc["target_mac"] = targetMac;
+    doc["read_pairing_token_active"] = true;
+    doc["read_pairing_token"] = readPairingToken;
+    doc["read_pairing_token_expires_in_seconds"] = readPairingTokenExpiresInSeconds();
+    String body;
+    serializeJson(doc, body);
+    server.send(200, "application/json", body);
+  });
+
   server.on("/api/scan", HTTP_GET, []() {
     int count = WiFi.scanNetworks(false, true);
     JsonDocument doc;
@@ -620,6 +673,51 @@ static void setupProvisioningWebServer() {
     server.send(200, "application/json", body);
   });
 
+  server.on("/api/select_candidate", HTTP_POST, []() {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, server.arg("plain"));
+    if (error) {
+      server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid json\"}");
+      return;
+    }
+    String nextDeviceId = doc["device_id"] | "";
+    String nextTargetMac = doc["mac"] | "";
+    int nextAddressType = doc["address_type"] | 0;
+    nextDeviceId.trim();
+    nextTargetMac = normalizeMac(nextTargetMac);
+    if (nextDeviceId.length() == 0 || nextTargetMac.length() == 0) {
+      server.send(400, "application/json", "{\"ok\":false,\"error\":\"device_id and mac are required\"}");
+      return;
+    }
+    bool found = false;
+    for (const BleCandidate& candidate : bleCandidates) {
+      if (candidate.name == nextDeviceId && candidate.mac == nextTargetMac) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      server.send(404, "application/json", "{\"ok\":false,\"error\":\"candidate not found\"}");
+      return;
+    }
+    deviceId = nextDeviceId;
+    targetMac = nextTargetMac;
+    targetAddressType = (esp_ble_addr_type_t)nextAddressType;
+    targetAddressTypeKnown = true;
+    pairingStatus = "paired";
+    saveStringConfig("device_id", deviceId);
+    saveStringConfig("target_mac", targetMac);
+    postGatewayStatus("portal_candidate_selected");
+    JsonDocument result;
+    result["ok"] = true;
+    result["device_id"] = deviceId;
+    result["target_mac"] = targetMac;
+    result["pairing_status"] = pairingStatus;
+    String body;
+    serializeJson(result, body);
+    server.send(200, "application/json", body);
+  });
+
   server.on("/api/save", HTTP_POST, []() {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, server.arg("plain"));
@@ -629,20 +727,7 @@ static void setupProvisioningWebServer() {
     }
     String nextSsid = doc["ssid"] | "";
     String nextPassword = doc["password"] | "";
-    String nextApiUrl = doc["api_url"] | "";
-    String nextApiToken = doc["api_token"] | "";
-    String nextDeviceId = doc["device_id"] | "";
-    String nextTargetMac = doc["target_mac"] | "";
-    String nextGatewayId = doc["gateway_id"] | "";
-    int nextInterval = doc["upload_interval"] | DEFAULT_UPLOAD_INTERVAL_SECONDS;
-    bool nextProduction = doc["production"] | false;
-
     nextSsid.trim();
-    nextApiUrl.trim();
-    nextApiToken.trim();
-    nextDeviceId.trim();
-    nextTargetMac = normalizeMac(nextTargetMac);
-    nextGatewayId.trim();
 
     if (nextSsid.length() > 0) {
       wifiSsid = nextSsid;
@@ -652,34 +737,7 @@ static void setupProvisioningWebServer() {
       wifiPassword = nextPassword;
       saveStringConfig("wifi_pass", wifiPassword);
     }
-    if (nextApiUrl.length() > 0) {
-      apiUrl = nextApiUrl;
-      saveStringConfig("api_url", apiUrl);
-    }
-    if (nextApiToken.length() > 0) {
-      apiToken = nextApiToken;
-      saveStringConfig("api_token", apiToken);
-    }
-    if (nextDeviceId.length() > 0) {
-      deviceId = nextDeviceId;
-      saveStringConfig("device_id", deviceId);
-    }
-    targetMac = nextTargetMac;
-    targetAddressTypeKnown = targetMac.length() > 0;
-    if (targetMac.length() > 0) {
-      saveStringConfig("target_mac", targetMac);
-      pairingStatus = "paired";
-    } else {
-      prefs.remove("target_mac");
-      pairingStatus = "unconfigured";
-    }
-    if (nextGatewayId.length() > 0) {
-      gatewayId = nextGatewayId;
-      saveStringConfig("gateway_id", gatewayId);
-    }
-    uploadIntervalSeconds = (uint16_t)constrain(nextInterval, MIN_UPLOAD_INTERVAL_SECONDS, 3600);
-    prefs.putUShort("upload_s", uploadIntervalSeconds);
-    productionEnabled = nextProduction;
+    productionEnabled = true;
     prefs.putBool("prod", productionEnabled);
 
     server.send(200, "application/json", "{\"ok\":true,\"rebooting\":true}");
@@ -689,6 +747,7 @@ static void setupProvisioningWebServer() {
 
   server.onNotFound(sendPortalPage);
   server.begin();
+  portalServerStarted = true;
 }
 
 static void startProvisioningPortal(bool apStaMode) {
@@ -714,15 +773,17 @@ static void startProvisioningPortal(bool apStaMode) {
 }
 
 static void handleProvisioningPortal() {
-  if (!provisioningPortalActive) return;
-  dnsServer.processNextRequest();
-  server.handleClient();
+  if (provisioningPortalActive) {
+    dnsServer.processNextRequest();
+  }
+  if (portalServerStarted && (provisioningPortalActive || WiFi.status() == WL_CONNECTED)) {
+    server.handleClient();
+  }
 }
 
 static void stopProvisioningPortal() {
   if (!provisioningPortalActive) return;
   dnsServer.stop();
-  server.stop();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_STA);
   esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
@@ -941,6 +1002,123 @@ static bool postGatewayStatus(const char* reason) {
     lastGatewayStatusPostMs = millis();
   }
   return status >= 200 && status < 300;
+}
+
+static bool postGatewayCandidates() {
+  if (apiUrl.length() == 0 || apiToken.length() == 0 || gatewayId.length() == 0) return false;
+  if (!ensureWifiConnected()) return false;
+
+  String endpoint = apiUrl;
+  endpoint.trim();
+  while (endpoint.endsWith("/")) endpoint.remove(endpoint.length() - 1);
+  endpoint += "/api/lumentree/gateways/";
+  endpoint += gatewayId;
+  endpoint += "/candidates";
+
+  JsonDocument doc;
+  JsonArray candidates = doc["candidates"].to<JsonArray>();
+  for (const BleCandidate& candidate : bleCandidates) {
+    JsonObject item = candidates.add<JsonObject>();
+    item["device_id"] = candidate.name.length() > 0 ? candidate.name : deviceId;
+    item["mac"] = candidate.mac;
+    item["address_type"] = candidate.addressType;
+    item["name"] = candidate.name;
+    item["rssi"] = candidate.rssi;
+    item["service_uuid_match"] = candidate.serviceUuidMatch;
+    item["characteristic_uuid_match"] = candidate.vendorGattMatch;
+    item["score"] = candidate.score;
+  }
+
+  String body;
+  serializeJson(doc, body);
+
+  WiFiClientSecure secureClient;
+  WiFiClient plainClient;
+  HTTPClient http;
+  bool beginOk = false;
+  if (endpoint.startsWith("https://")) {
+    if (tlsInsecure) {
+      secureClient.setInsecure();
+    }
+    beginOk = http.begin(secureClient, endpoint);
+  } else {
+    beginOk = http.begin(plainClient, endpoint);
+  }
+  if (!beginOk) return false;
+
+  http.setTimeout(8000);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", "Bearer " + apiToken);
+  http.addHeader("User-Agent", String(FW_NAME) + "/" + FW_VERSION);
+
+  int status = http.POST((uint8_t*)body.c_str(), body.length());
+  String response = http.getString();
+  http.end();
+
+  JsonDocument result;
+  result["type"] = status >= 200 && status < 300 ? "gateway_candidates_upload_ok" : "gateway_candidates_upload_failed";
+  result["uptime_ms"] = millis() - bootMs;
+  result["http_status"] = status;
+  result["candidate_count"] = bleCandidates.size();
+  result["response"] = response.substring(0, 300);
+  printJson(result);
+  return status >= 200 && status < 300;
+}
+
+static bool postReadPairingToken(const String& token, String& response) {
+  response = "";
+  if (apiUrl.length() == 0 || apiToken.length() == 0 || gatewayId.length() == 0 || deviceId.length() == 0 || targetMac.length() == 0) return false;
+  if (!ensureWifiConnected()) return false;
+
+  String endpoint = apiUrl;
+  endpoint.trim();
+  while (endpoint.endsWith("/")) endpoint.remove(endpoint.length() - 1);
+  endpoint += "/api/lumentree/gateways/";
+  endpoint += gatewayId;
+  endpoint += "/read-pairing-token";
+
+  JsonDocument doc;
+  doc["gateway_id"] = gatewayId;
+  doc["device_id"] = deviceId;
+  doc["mac"] = targetMac;
+  doc["token"] = token;
+  doc["firmware"] = String(FW_NAME) + "/" + FW_VERSION;
+  doc["uptime_ms"] = millis() - bootMs;
+  doc["pairing_status"] = pairingStatus;
+
+  String body;
+  serializeJson(doc, body);
+
+  WiFiClientSecure secureClient;
+  WiFiClient plainClient;
+  HTTPClient http;
+  bool beginOk = false;
+  if (endpoint.startsWith("https://")) {
+    if (tlsInsecure) {
+      secureClient.setInsecure();
+    }
+    beginOk = http.begin(secureClient, endpoint);
+  } else {
+    beginOk = http.begin(plainClient, endpoint);
+  }
+  if (!beginOk) return false;
+
+  http.setTimeout(8000);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", "Bearer " + apiToken);
+  http.addHeader("User-Agent", String(FW_NAME) + "/" + FW_VERSION);
+
+  int httpStatus = http.POST((uint8_t*)body.c_str(), body.length());
+  response = http.getString();
+  http.end();
+
+  JsonDocument log;
+  log["type"] = httpStatus >= 200 && httpStatus < 300 ? "read_pairing_token_registered" : "read_pairing_token_failed";
+  log["uptime_ms"] = millis() - bootMs;
+  log["http_status"] = httpStatus;
+  log["response"] = response.substring(0, 300);
+  printJson(log);
+  return httpStatus >= 200 && httpStatus < 300;
 }
 
 static bool postWritePairingCode(const String& code, String& response) {
@@ -1996,6 +2174,15 @@ static bool advertisedNameMatchesDeviceId(const String& name) {
   return lowerName.indexOf(lowerDeviceId) >= 0;
 }
 
+static bool advertisedNameLooksLikeDeviceId(const String& name) {
+  if (name.length() < 5) return false;
+  if (!(name[0] == 'P' || name[0] == 'p')) return false;
+  for (size_t i = 1; i < name.length(); i++) {
+    if (!isDigit(name[i])) return false;
+  }
+  return true;
+}
+
 static int candidateScore(bool nameMatch, bool serviceUuidMatch, bool vendorGattMatch, int rssi) {
   int score = 0;
   if (nameMatch) score += 100;
@@ -2063,7 +2250,7 @@ static void emitAdvertisement(BLEAdvertisedDevice& device) {
   if (targetMac.length() == 0 && !hasUsefulPayload(device)) return;
 
   String name = device.haveName() ? device.getName().c_str() : "";
-  bool nameMatch = advertisedNameMatchesDeviceId(name);
+  bool nameMatch = deviceId.length() > 0 ? advertisedNameMatchesDeviceId(name) : advertisedNameLooksLikeDeviceId(name);
   bool uuidMatch = serviceUuidMatches(device, KNOWN_LUMENTREE_SERVICE_UUID);
   bool vendorGattMatch = serviceUuidMatches(device, LUMENTREE_VENDOR_SERVICE_UUID) ||
                          serviceUuidMatches(device, "ffe0") ||
@@ -2172,11 +2359,6 @@ static bool runBleDiscovery(bool allowAutoBind) {
     emitError("ble_not_ready", "BLE scanner is not initialized");
     return false;
   }
-  if (deviceId.length() == 0) {
-    pairingStatus = "unconfigured";
-    emitError("device_id_not_configured", "set device id before BLE discovery");
-    return false;
-  }
 
   pairingStatus = "scanning";
   bleCandidates.clear();
@@ -2200,12 +2382,17 @@ static bool runBleDiscovery(bool allowAutoBind) {
   if (bleCandidates.size() == 0) {
     pairingStatus = "scanning_no_candidate";
     emitBleCandidates("ble_candidates");
+    postGatewayCandidates();
     postGatewayStatus("ble_discovery_no_candidate");
     return false;
   }
 
   if (allowAutoBind && bleCandidates.size() == 1) {
     const BleCandidate& candidate = bleCandidates[0];
+    if (deviceId.length() == 0 && candidate.name.length() > 0) {
+      deviceId = candidate.name;
+      saveStringConfig("device_id", deviceId);
+    }
     targetMac = candidate.mac;
     targetAddressType = (esp_ble_addr_type_t)candidate.addressType;
     targetAddressTypeKnown = true;
@@ -2221,12 +2408,14 @@ static bool runBleDiscovery(bool allowAutoBind) {
     doc["rssi"] = candidate.rssi;
     doc["score"] = candidate.score;
     printJson(doc);
+    postGatewayCandidates();
     postGatewayStatus("ble_auto_paired");
     return true;
   }
 
   pairingStatus = "multiple_candidates";
   emitBleCandidates("ble_candidates");
+  postGatewayCandidates();
   postGatewayStatus("ble_discovery_multiple_candidates");
   return false;
 }
@@ -3177,6 +3366,7 @@ void setup() {
   bleScan->setActiveScan(activeScan);
   bleScan->setInterval(scanInterval);
   bleScan->setWindow(scanWindow);
+  setupProvisioningWebServer();
 
   if (wifiSsid.length() == 0) {
     startProvisioningPortal(false);

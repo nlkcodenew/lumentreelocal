@@ -10,14 +10,35 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import LumentreeLocalApiClient, LumentreeLocalApiError, LumentreeLocalNotFoundError
-from .const import CONF_API_URL, CONF_DEVICE_ID, CONF_WRITE_GRANT_TOKEN, DEFAULT_API_URL, DOMAIN
+from .api import LumentreeLocalApiClient, LumentreeLocalApiError
+from .const import (
+    CONF_API_URL,
+    CONF_DEVICE_ID,
+    CONF_READ_GRANT_TOKEN,
+    CONF_WRITE_GRANT_TOKEN,
+    DEFAULT_API_URL,
+    DOMAIN,
+)
+
+
+class InitialGrantClaimError(Exception):
+    """Initial claim failed in a user-facing way."""
+
+    def __init__(self, error_key: str) -> None:
+        self.error_key = error_key
+        super().__init__(error_key)
 
 
 def device_id_schema(default: str | None = None) -> vol.Schema:
     """Return the Device ID form schema."""
     selector = vol.Required(CONF_DEVICE_ID, default=default) if default else vol.Required(CONF_DEVICE_ID)
-    return vol.Schema({selector: str})
+    return vol.Schema(
+        {
+            selector: str,
+            vol.Required("read_pairing_token"): str,
+            vol.Optional("write_pairing_token"): str,
+        }
+    )
 
 
 def options_schema(device_id: str | None = None, write_grant_configured: bool = False) -> vol.Schema:
@@ -33,16 +54,55 @@ def options_schema(device_id: str | None = None, write_grant_configured: bool = 
     )
 
 
-async def validate_device_id(hass, device_id: str) -> str:
-    """Validate server reachability and return the normalized Device ID."""
+async def claim_initial_grants(hass, device_id: str, read_pairing_token: str, write_pairing_token: str = "") -> dict[str, str]:
+    """Validate reachability and claim the required initial grants."""
     client = LumentreeLocalApiClient(async_get_clientsession(hass), DEFAULT_API_URL)
-    await client.health()
     try:
-        latest = await client.latest(device_id)
-    except LumentreeLocalNotFoundError:
-        await client.device_health(device_id)
-        return device_id
-    return str(latest.get("device_id") or device_id)
+        await client.health()
+    except LumentreeLocalApiError as err:
+        raise InitialGrantClaimError("cannot_connect") from err
+
+    try:
+        read_claim = await client.claim_read_grant(device_id, read_pairing_token)
+    except LumentreeLocalApiError as err:
+        raise InitialGrantClaimError("invalid_read_pairing_token") from err
+
+    read_grant_token = read_claim.get("grant_token")
+    if not isinstance(read_grant_token, str) or not read_grant_token:
+        raise InitialGrantClaimError("invalid_read_pairing_token")
+
+    tokens = {CONF_READ_GRANT_TOKEN: read_grant_token}
+    if not write_pairing_token:
+        return tokens
+
+    try:
+        write_claim = await client.claim_write_grant(device_id, write_pairing_token)
+    except LumentreeLocalApiError as err:
+        read_client = LumentreeLocalApiClient(
+            async_get_clientsession(hass),
+            DEFAULT_API_URL,
+            read_token=read_grant_token,
+        )
+        try:
+            await read_client.revoke_read_grant(device_id)
+        except LumentreeLocalApiError:
+            pass
+        raise InitialGrantClaimError("invalid_write_pairing_code") from err
+
+    write_grant_token = write_claim.get("grant_token")
+    if not isinstance(write_grant_token, str) or not write_grant_token:
+        read_client = LumentreeLocalApiClient(
+            async_get_clientsession(hass),
+            DEFAULT_API_URL,
+            read_token=read_grant_token,
+        )
+        try:
+            await read_client.revoke_read_grant(device_id)
+        except LumentreeLocalApiError:
+            pass
+        raise InitialGrantClaimError("invalid_write_pairing_code")
+    tokens[CONF_WRITE_GRANT_TOKEN] = write_grant_token
+    return tokens
 
 
 class LumentreeLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -61,19 +121,23 @@ class LumentreeLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             device_id = user_input[CONF_DEVICE_ID].strip()
+            read_pairing_token = user_input["read_pairing_token"].strip()
+            write_pairing_token = user_input.get("write_pairing_token", "").strip()
+            await self.async_set_unique_id(device_id)
+            self._abort_if_unique_id_configured()
 
             try:
-                server_device_id = await validate_device_id(self.hass, device_id)
-            except LumentreeLocalApiError:
-                errors["base"] = "cannot_connect"
+                grants = await claim_initial_grants(self.hass, device_id, read_pairing_token, write_pairing_token)
+            except InitialGrantClaimError as err:
+                errors["base"] = err.error_key
             else:
-                await self.async_set_unique_id(server_device_id)
-                self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title="Lumentree Local",
                     data={
                         CONF_API_URL: DEFAULT_API_URL,
-                        CONF_DEVICE_ID: server_device_id,
+                        CONF_DEVICE_ID: device_id,
+                        CONF_READ_GRANT_TOKEN: grants[CONF_READ_GRANT_TOKEN],
+                        CONF_WRITE_GRANT_TOKEN: grants.get(CONF_WRITE_GRANT_TOKEN, ""),
                     },
                 )
 
@@ -93,7 +157,14 @@ class LumentreeLocalOptionsFlow(config_entries.OptionsFlow):
             CONF_DEVICE_ID,
             self._config_entry.data.get(CONF_DEVICE_ID, ""),
         )
-        current_write_grant = self._config_entry.options.get(CONF_WRITE_GRANT_TOKEN, "")
+        current_read_grant = self._config_entry.options.get(
+            CONF_READ_GRANT_TOKEN,
+            self._config_entry.data.get(CONF_READ_GRANT_TOKEN, ""),
+        )
+        current_write_grant = self._config_entry.options.get(
+            CONF_WRITE_GRANT_TOKEN,
+            self._config_entry.data.get(CONF_WRITE_GRANT_TOKEN, ""),
+        )
 
         if user_input is not None:
             device_id = user_input[CONF_DEVICE_ID].strip()
@@ -101,19 +172,23 @@ class LumentreeLocalOptionsFlow(config_entries.OptionsFlow):
             revoke_write_access = bool(user_input.get("revoke_write_access", False))
             keep_write_grant = bool(user_input.get("keep_write_grant", True))
             try:
-                server_device_id = await validate_device_id(self.hass, device_id)
+                client = LumentreeLocalApiClient(
+                    async_get_clientsession(self.hass),
+                    DEFAULT_API_URL,
+                    read_token=current_read_grant,
+                    write_token=current_write_grant,
+                )
+                await client.health()
             except LumentreeLocalApiError:
                 errors["base"] = "cannot_connect"
             else:
-                options = {CONF_DEVICE_ID: server_device_id}
+                options = {
+                    CONF_DEVICE_ID: device_id,
+                    CONF_READ_GRANT_TOKEN: current_read_grant,
+                }
                 if revoke_write_access and current_write_grant:
-                    revoke_client = LumentreeLocalApiClient(
-                        async_get_clientsession(self.hass),
-                        DEFAULT_API_URL,
-                        current_write_grant,
-                    )
                     try:
-                        await revoke_client.revoke_write_grant(server_device_id)
+                        await client.revoke_write_grant(device_id)
                     except LumentreeLocalApiError:
                         errors["base"] = "invalid_write_grant"
                     else:
@@ -121,7 +196,7 @@ class LumentreeLocalOptionsFlow(config_entries.OptionsFlow):
                 if not errors and write_pairing_code:
                     claim_client = LumentreeLocalApiClient(async_get_clientsession(self.hass), DEFAULT_API_URL)
                     try:
-                        claim = await claim_client.claim_write_grant(server_device_id, write_pairing_code)
+                        claim = await claim_client.claim_write_grant(device_id, write_pairing_code)
                     except LumentreeLocalApiError:
                         errors["base"] = "invalid_write_pairing_code"
                     else:

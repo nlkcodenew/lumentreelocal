@@ -3,17 +3,19 @@
     "step": {
       "user": {
         "title": "Lumentree Local",
-        "description": "Enter the Lumentree inverter device ID.",
+        "description": "Enter the inverter Device ID and the required read pairing token from the ESP32 local portal. The write pairing token is optional and only needed for direct inverter setting changes.",
         "data": {
-          "device_id": "Device ID"
+          "device_id": "Device ID",
+          "read_pairing_token": "Read pairing token",
+          "write_pairing_token": "Write pairing token for direct inverter changes"
         }
       },
       "init": {
         "title": "Lumentree Local",
-        "description": "Update the inverter Device ID. Warning: any write-capable entity in this integration changes inverter settings directly on the inverter. Keep the integration read-only unless you intend to modify inverter behavior. To enable production write access, open the ESP32 portal, generate a one-time write pairing code, and enter it here.",
+        "description": "Update the inverter Device ID. The read grant stays required for normal data access. Warning: any write-capable entity in this integration changes inverter settings directly on the inverter. Keep the integration read-only unless you intend to modify inverter behavior. To enable production write access, open the ESP32 portal, generate a one-time write pairing token, and enter it here.",
         "data": {
           "device_id": "Device ID",
-          "write_pairing_code": "Write pairing code for direct inverter changes",
+          "write_pairing_code": "Write pairing token for direct inverter changes",
           "revoke_write_access": "Revoke current write access",
           "keep_write_grant": "Keep current write access enabled"
         }
@@ -21,6 +23,7 @@
     },
     "error": {
       "cannot_connect": "Cannot connect to the local Lumentree server",
+      "invalid_read_pairing_token": "The read pairing token is invalid, expired, or the selected ESP32/inverter binding does not match",
       "invalid_write_pairing_code": "The write pairing code is invalid, expired, or the ESP32 gateway is not online",
       "invalid_write_grant": "The current write grant could not be revoked",
       "unknown": "Unexpected error"
