@@ -1,0 +1,68 @@
+{
+  "source_jsonl": "docs/evidence/target-soc-range-scan/2026-05-18-target-soc-write-16-to-6.jsonl",
+  "device_id": "P240819130",
+  "firmware": "lumentree-ble-bridge/0.8.0",
+  "requested_test": "register 144 target SOC 16 to 6",
+  "result": {
+    "type": "target_soc_write_test_result",
+    "uptime_ms": 77955,
+    "register": 144,
+    "before_value": 16,
+    "requested_value": 6,
+    "after_value": 16,
+    "write_ack": false,
+    "verified": false,
+    "safety": "pre_read_write_post_read_single_register_144"
+  },
+  "key_events": [
+    {
+      "type": "target_soc_write_test_pre_read",
+      "uptime_ms": 65805,
+      "register": 144,
+      "value": 16,
+      "expected_before": 16
+    },
+    {
+      "type": "ble_modbus_write_single_register_start",
+      "uptime_ms": 65807,
+      "target_mac": "d8:13:2a:ee:58:d6",
+      "address_type": 0,
+      "label": "write_register_144_target_soc_to_6",
+      "register": 144,
+      "value": 6,
+      "command_hex": "01060090000609E5",
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "characteristic_uuid": "0000ffe1-0000-1000-8000-00805f9b34fb",
+      "safety": "whitelisted_function_06_single_register_write"
+    },
+    {
+      "type": "ble_modbus_write_single_register_done",
+      "uptime_ms": 72292,
+      "target_mac": "d8:13:2a:ee:58:d6",
+      "label": "write_register_144_target_soc_to_6",
+      "register": 144,
+      "value": 6,
+      "response_hex": "",
+      "response_matches_request": false,
+      "notify_count": 0,
+      "safety": "function_06_whitelisted_single_register_write_done"
+    },
+    {
+      "type": "error",
+      "code": "target_soc_write_ack_failed",
+      "message": "write response did not echo request; verification will still run",
+      "uptime_ms": 73017
+    },
+    {
+      "type": "target_soc_write_test_result",
+      "uptime_ms": 77955,
+      "register": 144,
+      "before_value": 16,
+      "requested_value": 6,
+      "after_value": 16,
+      "write_ack": false,
+      "verified": false,
+      "safety": "pre_read_write_post_read_single_register_144"
+    }
+  ]
+}

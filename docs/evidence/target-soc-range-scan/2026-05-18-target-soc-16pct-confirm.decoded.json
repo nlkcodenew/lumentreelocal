@@ -1,0 +1,596 @@
+{
+  "captured_at_local_note": "2026-05-18 confirmation after user changed target SOC from 13% to 16%",
+  "device_id": "P240819130",
+  "assumed_app_state": {
+    "first_discharge_time_enabled": false,
+    "time_start": "20:00",
+    "time_end": "08:00",
+    "target_soc_percent": 16,
+    "discharge_power_w": 3500
+  },
+  "source_jsonl": "docs/evidence/target-soc-range-scan/2026-05-18-target-soc-16pct-confirm.jsonl",
+  "ranges": [
+    {
+      "label": "manual_registers_95_189",
+      "start_register": 95,
+      "end_register": 189,
+      "payload_hex": "0103BE014C0000000000000000000115E0164415E0013A0000003A00460001000000000005000A00001388145000001388138800000001000000000000000000010000000000000000032507D005780640000000000000000004B00320064007D0000000190010002800320000005A005A00010000000014B41388157C1388003C000000001A05120A3A02000000000001000100000000000000000000000003200578057806400014005507D00DAC07D00DAC0DAC0DAC000015680000003D004C7429",
+      "length": 195,
+      "notify_count": 24,
+      "safety": "reassembled_function_03_read_response_only",
+      "register_count": 95,
+      "registers": [
+        {
+          "register": 95,
+          "hex": "014c",
+          "uint": 332,
+          "int": 332
+        },
+        {
+          "register": 96,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 97,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 98,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 99,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 100,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 101,
+          "hex": "15e0",
+          "uint": 5600,
+          "int": 5600
+        },
+        {
+          "register": 102,
+          "hex": "1644",
+          "uint": 5700,
+          "int": 5700
+        },
+        {
+          "register": 103,
+          "hex": "15e0",
+          "uint": 5600,
+          "int": 5600
+        },
+        {
+          "register": 104,
+          "hex": "013a",
+          "uint": 314,
+          "int": 314
+        },
+        {
+          "register": 105,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 106,
+          "hex": "003a",
+          "uint": 58,
+          "int": 58
+        },
+        {
+          "register": 107,
+          "hex": "0046",
+          "uint": 70,
+          "int": 70
+        },
+        {
+          "register": 108,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 109,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 110,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 111,
+          "hex": "0005",
+          "uint": 5,
+          "int": 5
+        },
+        {
+          "register": 112,
+          "hex": "000a",
+          "uint": 10,
+          "int": 10
+        },
+        {
+          "register": 113,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 114,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 115,
+          "hex": "1450",
+          "uint": 5200,
+          "int": 5200
+        },
+        {
+          "register": 116,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 117,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 118,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 119,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 120,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 121,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 122,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 123,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 124,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 125,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 126,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 127,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 128,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 129,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 130,
+          "hex": "0325",
+          "uint": 805,
+          "int": 805
+        },
+        {
+          "register": 131,
+          "hex": "07d0",
+          "uint": 2000,
+          "int": 2000
+        },
+        {
+          "register": 132,
+          "hex": "0578",
+          "uint": 1400,
+          "int": 1400
+        },
+        {
+          "register": 133,
+          "hex": "0640",
+          "uint": 1600,
+          "int": 1600
+        },
+        {
+          "register": 134,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 135,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 136,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 137,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 138,
+          "hex": "04b0",
+          "uint": 1200,
+          "int": 1200
+        },
+        {
+          "register": 139,
+          "hex": "0320",
+          "uint": 800,
+          "int": 800
+        },
+        {
+          "register": 140,
+          "hex": "0640",
+          "uint": 1600,
+          "int": 1600
+        },
+        {
+          "register": 141,
+          "hex": "07d0",
+          "uint": 2000,
+          "int": 2000
+        },
+        {
+          "register": 142,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 143,
+          "hex": "0019",
+          "uint": 25,
+          "int": 25
+        },
+        {
+          "register": 144,
+          "hex": "0010",
+          "uint": 16,
+          "int": 16
+        },
+        {
+          "register": 145,
+          "hex": "0028",
+          "uint": 40,
+          "int": 40
+        },
+        {
+          "register": 146,
+          "hex": "0032",
+          "uint": 50,
+          "int": 50
+        },
+        {
+          "register": 147,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 148,
+          "hex": "005a",
+          "uint": 90,
+          "int": 90
+        },
+        {
+          "register": 149,
+          "hex": "005a",
+          "uint": 90,
+          "int": 90
+        },
+        {
+          "register": 150,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 151,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 152,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 153,
+          "hex": "14b4",
+          "uint": 5300,
+          "int": 5300
+        },
+        {
+          "register": 154,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 155,
+          "hex": "157c",
+          "uint": 5500,
+          "int": 5500
+        },
+        {
+          "register": 156,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 157,
+          "hex": "003c",
+          "uint": 60,
+          "int": 60
+        },
+        {
+          "register": 158,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 159,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 160,
+          "hex": "1a05",
+          "uint": 6661,
+          "int": 6661
+        },
+        {
+          "register": 161,
+          "hex": "120a",
+          "uint": 4618,
+          "int": 4618
+        },
+        {
+          "register": 162,
+          "hex": "3a02",
+          "uint": 14850,
+          "int": 14850
+        },
+        {
+          "register": 163,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 164,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 165,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 166,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 167,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 168,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 169,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 170,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 171,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 172,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 173,
+          "hex": "0320",
+          "uint": 800,
+          "int": 800
+        },
+        {
+          "register": 174,
+          "hex": "0578",
+          "uint": 1400,
+          "int": 1400
+        },
+        {
+          "register": 175,
+          "hex": "0578",
+          "uint": 1400,
+          "int": 1400
+        },
+        {
+          "register": 176,
+          "hex": "0640",
+          "uint": 1600,
+          "int": 1600
+        },
+        {
+          "register": 177,
+          "hex": "0014",
+          "uint": 20,
+          "int": 20
+        },
+        {
+          "register": 178,
+          "hex": "0055",
+          "uint": 85,
+          "int": 85
+        },
+        {
+          "register": 179,
+          "hex": "07d0",
+          "uint": 2000,
+          "int": 2000
+        },
+        {
+          "register": 180,
+          "hex": "0dac",
+          "uint": 3500,
+          "int": 3500
+        },
+        {
+          "register": 181,
+          "hex": "07d0",
+          "uint": 2000,
+          "int": 2000
+        },
+        {
+          "register": 182,
+          "hex": "0dac",
+          "uint": 3500,
+          "int": 3500
+        },
+        {
+          "register": 183,
+          "hex": "0dac",
+          "uint": 3500,
+          "int": 3500
+        },
+        {
+          "register": 184,
+          "hex": "0dac",
+          "uint": 3500,
+          "int": 3500
+        },
+        {
+          "register": 185,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 186,
+          "hex": "1568",
+          "uint": 5480,
+          "int": 5480
+        },
+        {
+          "register": 187,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 188,
+          "hex": "003d",
+          "uint": 61,
+          "int": 61
+        },
+        {
+          "register": 189,
+          "hex": "004c",
+          "uint": 76,
+          "int": 76
+        }
+      ]
+    }
+  ]
+}

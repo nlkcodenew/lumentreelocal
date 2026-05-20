@@ -1,0 +1,3506 @@
+{
+  "captured_at_local_note": "2026-05-18 after user changed target SOC to 13%",
+  "device_id": "P240819130",
+  "assumed_app_state": {
+    "first_discharge_time_enabled": false,
+    "time_start": "20:00",
+    "time_end": "08:00",
+    "target_soc_percent": 13,
+    "discharge_power_w": 3500
+  },
+  "source_jsonl": "docs/evidence/target-soc-range-scan/2026-05-18-target-soc-13pct-ranges.jsonl",
+  "ranges": [
+    {
+      "label": "manual_registers_95_189",
+      "start_register": 95,
+      "end_register": 189,
+      "payload_hex": "0103BE014B0000000000000000000115E0164415E0013A0000003A00460001000000000005000A00001388145000001388138800000001000000000000000000010000000000000000032507D005780640000000000000000004B00320064007D000000019000D002800320000005A005A00010000000014B41388157C1388003C000000001A05120A3338000000000001000100000000000000000000000003200578057806400014005507D00DAC07D00DAC0DAC0DAC000015680000003D004C34F1",
+      "length": 195,
+      "notify_count": 24,
+      "safety": "reassembled_function_03_read_response_only",
+      "register_count": 95,
+      "registers": [
+        {
+          "register": 95,
+          "hex": "014b",
+          "uint": 331,
+          "int": 331
+        },
+        {
+          "register": 96,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 97,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 98,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 99,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 100,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 101,
+          "hex": "15e0",
+          "uint": 5600,
+          "int": 5600
+        },
+        {
+          "register": 102,
+          "hex": "1644",
+          "uint": 5700,
+          "int": 5700
+        },
+        {
+          "register": 103,
+          "hex": "15e0",
+          "uint": 5600,
+          "int": 5600
+        },
+        {
+          "register": 104,
+          "hex": "013a",
+          "uint": 314,
+          "int": 314
+        },
+        {
+          "register": 105,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 106,
+          "hex": "003a",
+          "uint": 58,
+          "int": 58
+        },
+        {
+          "register": 107,
+          "hex": "0046",
+          "uint": 70,
+          "int": 70
+        },
+        {
+          "register": 108,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 109,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 110,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 111,
+          "hex": "0005",
+          "uint": 5,
+          "int": 5
+        },
+        {
+          "register": 112,
+          "hex": "000a",
+          "uint": 10,
+          "int": 10
+        },
+        {
+          "register": 113,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 114,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 115,
+          "hex": "1450",
+          "uint": 5200,
+          "int": 5200
+        },
+        {
+          "register": 116,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 117,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 118,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 119,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 120,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 121,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 122,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 123,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 124,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 125,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 126,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 127,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 128,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 129,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 130,
+          "hex": "0325",
+          "uint": 805,
+          "int": 805
+        },
+        {
+          "register": 131,
+          "hex": "07d0",
+          "uint": 2000,
+          "int": 2000
+        },
+        {
+          "register": 132,
+          "hex": "0578",
+          "uint": 1400,
+          "int": 1400
+        },
+        {
+          "register": 133,
+          "hex": "0640",
+          "uint": 1600,
+          "int": 1600
+        },
+        {
+          "register": 134,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 135,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 136,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 137,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 138,
+          "hex": "04b0",
+          "uint": 1200,
+          "int": 1200
+        },
+        {
+          "register": 139,
+          "hex": "0320",
+          "uint": 800,
+          "int": 800
+        },
+        {
+          "register": 140,
+          "hex": "0640",
+          "uint": 1600,
+          "int": 1600
+        },
+        {
+          "register": 141,
+          "hex": "07d0",
+          "uint": 2000,
+          "int": 2000
+        },
+        {
+          "register": 142,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 143,
+          "hex": "0019",
+          "uint": 25,
+          "int": 25
+        },
+        {
+          "register": 144,
+          "hex": "000d",
+          "uint": 13,
+          "int": 13
+        },
+        {
+          "register": 145,
+          "hex": "0028",
+          "uint": 40,
+          "int": 40
+        },
+        {
+          "register": 146,
+          "hex": "0032",
+          "uint": 50,
+          "int": 50
+        },
+        {
+          "register": 147,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 148,
+          "hex": "005a",
+          "uint": 90,
+          "int": 90
+        },
+        {
+          "register": 149,
+          "hex": "005a",
+          "uint": 90,
+          "int": 90
+        },
+        {
+          "register": 150,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 151,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 152,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 153,
+          "hex": "14b4",
+          "uint": 5300,
+          "int": 5300
+        },
+        {
+          "register": 154,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 155,
+          "hex": "157c",
+          "uint": 5500,
+          "int": 5500
+        },
+        {
+          "register": 156,
+          "hex": "1388",
+          "uint": 5000,
+          "int": 5000
+        },
+        {
+          "register": 157,
+          "hex": "003c",
+          "uint": 60,
+          "int": 60
+        },
+        {
+          "register": 158,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 159,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 160,
+          "hex": "1a05",
+          "uint": 6661,
+          "int": 6661
+        },
+        {
+          "register": 161,
+          "hex": "120a",
+          "uint": 4618,
+          "int": 4618
+        },
+        {
+          "register": 162,
+          "hex": "3338",
+          "uint": 13112,
+          "int": 13112
+        },
+        {
+          "register": 163,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 164,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 165,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 166,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 167,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 168,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 169,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 170,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 171,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 172,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 173,
+          "hex": "0320",
+          "uint": 800,
+          "int": 800
+        },
+        {
+          "register": 174,
+          "hex": "0578",
+          "uint": 1400,
+          "int": 1400
+        },
+        {
+          "register": 175,
+          "hex": "0578",
+          "uint": 1400,
+          "int": 1400
+        },
+        {
+          "register": 176,
+          "hex": "0640",
+          "uint": 1600,
+          "int": 1600
+        },
+        {
+          "register": 177,
+          "hex": "0014",
+          "uint": 20,
+          "int": 20
+        },
+        {
+          "register": 178,
+          "hex": "0055",
+          "uint": 85,
+          "int": 85
+        },
+        {
+          "register": 179,
+          "hex": "07d0",
+          "uint": 2000,
+          "int": 2000
+        },
+        {
+          "register": 180,
+          "hex": "0dac",
+          "uint": 3500,
+          "int": 3500
+        },
+        {
+          "register": 181,
+          "hex": "07d0",
+          "uint": 2000,
+          "int": 2000
+        },
+        {
+          "register": 182,
+          "hex": "0dac",
+          "uint": 3500,
+          "int": 3500
+        },
+        {
+          "register": 183,
+          "hex": "0dac",
+          "uint": 3500,
+          "int": 3500
+        },
+        {
+          "register": 184,
+          "hex": "0dac",
+          "uint": 3500,
+          "int": 3500
+        },
+        {
+          "register": 185,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 186,
+          "hex": "1568",
+          "uint": 5480,
+          "int": 5480
+        },
+        {
+          "register": 187,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 188,
+          "hex": "003d",
+          "uint": 61,
+          "int": 61
+        },
+        {
+          "register": 189,
+          "hex": "004c",
+          "uint": 76,
+          "int": 76
+        }
+      ]
+    },
+    {
+      "label": "manual_registers_190_284",
+      "start_register": 190,
+      "end_register": 284,
+      "payload_hex": "0103BE002614A6FFF5012F0000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000C000A80001000D11220000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030100BE1426FFA601F5002F00000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000F9EF",
+      "length": 195,
+      "notify_count": 24,
+      "safety": "reassembled_function_03_read_response_only",
+      "register_count": 95,
+      "registers": [
+        {
+          "register": 190,
+          "hex": "0026",
+          "uint": 38,
+          "int": 38
+        },
+        {
+          "register": 191,
+          "hex": "14a6",
+          "uint": 5286,
+          "int": 5286
+        },
+        {
+          "register": 192,
+          "hex": "fff5",
+          "uint": 65525,
+          "int": -11
+        },
+        {
+          "register": 193,
+          "hex": "012f",
+          "uint": 303,
+          "int": 303
+        },
+        {
+          "register": 194,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 195,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 196,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 197,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 198,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 199,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 200,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 201,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 202,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 203,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 204,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 205,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 206,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 207,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 208,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 209,
+          "hex": "0100",
+          "uint": 256,
+          "int": 256
+        },
+        {
+          "register": 210,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 211,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 212,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 213,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 214,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 215,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 216,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 217,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 218,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 219,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 220,
+          "hex": "00c0",
+          "uint": 192,
+          "int": 192
+        },
+        {
+          "register": 221,
+          "hex": "00a8",
+          "uint": 168,
+          "int": 168
+        },
+        {
+          "register": 222,
+          "hex": "0001",
+          "uint": 1,
+          "int": 1
+        },
+        {
+          "register": 223,
+          "hex": "000d",
+          "uint": 13,
+          "int": 13
+        },
+        {
+          "register": 224,
+          "hex": "1122",
+          "uint": 4386,
+          "int": 4386
+        },
+        {
+          "register": 225,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 226,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 227,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 228,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 229,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 230,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 231,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 232,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 233,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 234,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 235,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 236,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 237,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 238,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 239,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 240,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 241,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 242,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 243,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 244,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 245,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 246,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 247,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 248,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 249,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 250,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 251,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 252,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 253,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 254,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 255,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 256,
+          "hex": "0301",
+          "uint": 769,
+          "int": 769
+        },
+        {
+          "register": 257,
+          "hex": "00be",
+          "uint": 190,
+          "int": 190
+        },
+        {
+          "register": 258,
+          "hex": "1426",
+          "uint": 5158,
+          "int": 5158
+        },
+        {
+          "register": 259,
+          "hex": "ffa6",
+          "uint": 65446,
+          "int": -90
+        },
+        {
+          "register": 260,
+          "hex": "01f5",
+          "uint": 501,
+          "int": 501
+        },
+        {
+          "register": 261,
+          "hex": "002f",
+          "uint": 47,
+          "int": 47
+        },
+        {
+          "register": 262,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 263,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 264,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 265,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 266,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 267,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 268,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 269,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 270,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 271,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 272,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 273,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 274,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 275,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 276,
+          "hex": "0100",
+          "uint": 256,
+          "int": 256
+        },
+        {
+          "register": 277,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 278,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 279,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 280,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 281,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 282,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 283,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 284,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        }
+      ]
+    },
+    {
+      "label": "manual_registers_285_379",
+      "start_register": 285,
+      "end_register": 379,
+      "payload_hex": "0103BE000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004F95",
+      "length": 195,
+      "notify_count": 24,
+      "safety": "reassembled_function_03_read_response_only",
+      "register_count": 95,
+      "registers": [
+        {
+          "register": 285,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 286,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 287,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 288,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 289,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 290,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 291,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 292,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 293,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 294,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 295,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 296,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 297,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 298,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 299,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 300,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 301,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 302,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 303,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 304,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 305,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 306,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 307,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 308,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 309,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 310,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 311,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 312,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 313,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 314,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 315,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 316,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 317,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 318,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 319,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 320,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 321,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 322,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 323,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 324,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 325,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 326,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 327,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 328,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 329,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 330,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 331,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 332,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 333,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 334,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 335,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 336,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 337,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 338,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 339,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 340,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 341,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 342,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 343,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 344,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 345,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 346,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 347,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 348,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 349,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 350,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 351,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 352,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 353,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 354,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 355,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 356,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 357,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 358,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 359,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 360,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 361,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 362,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 363,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 364,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 365,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 366,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 367,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 368,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 369,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 370,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 371,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 372,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 373,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 374,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 375,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 376,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 377,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 378,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 379,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        }
+      ]
+    },
+    {
+      "label": "manual_registers_380_474",
+      "start_register": 380,
+      "end_register": 474,
+      "payload_hex": "0103BE000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004F95",
+      "length": 195,
+      "notify_count": 24,
+      "safety": "reassembled_function_03_read_response_only",
+      "register_count": 95,
+      "registers": [
+        {
+          "register": 380,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 381,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 382,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 383,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 384,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 385,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 386,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 387,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 388,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 389,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 390,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 391,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 392,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 393,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 394,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 395,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 396,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 397,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 398,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 399,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 400,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 401,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 402,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 403,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 404,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 405,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 406,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 407,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 408,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 409,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 410,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 411,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 412,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 413,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 414,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 415,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 416,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 417,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 418,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 419,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 420,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 421,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 422,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 423,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 424,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 425,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 426,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 427,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 428,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 429,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 430,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 431,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 432,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 433,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 434,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 435,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 436,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 437,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 438,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 439,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 440,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 441,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 442,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 443,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 444,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 445,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 446,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 447,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 448,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 449,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 450,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 451,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 452,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 453,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 454,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 455,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 456,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 457,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 458,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 459,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 460,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 461,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 462,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 463,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 464,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 465,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 466,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 467,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 468,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 469,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 470,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 471,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 472,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 473,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 474,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        }
+      ]
+    },
+    {
+      "label": "manual_registers_475_569",
+      "start_register": 475,
+      "end_register": 569,
+      "payload_hex": "0103BE000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004F95",
+      "length": 195,
+      "notify_count": 24,
+      "safety": "reassembled_function_03_read_response_only",
+      "register_count": 95,
+      "registers": [
+        {
+          "register": 475,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 476,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 477,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 478,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 479,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 480,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 481,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 482,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 483,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 484,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 485,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 486,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 487,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 488,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 489,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 490,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 491,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 492,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 493,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 494,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 495,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 496,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 497,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 498,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 499,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 500,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 501,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 502,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 503,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 504,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 505,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 506,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 507,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 508,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 509,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 510,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 511,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 512,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 513,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 514,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 515,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 516,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 517,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 518,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 519,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 520,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 521,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 522,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 523,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 524,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 525,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 526,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 527,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 528,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 529,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 530,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 531,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 532,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 533,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 534,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 535,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 536,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 537,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 538,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 539,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 540,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 541,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 542,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 543,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 544,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 545,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 546,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 547,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 548,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 549,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 550,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 551,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 552,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 553,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 554,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 555,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 556,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 557,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 558,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 559,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 560,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 561,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 562,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 563,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 564,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 565,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 566,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 567,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 568,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 569,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        }
+      ]
+    },
+    {
+      "label": "manual_registers_570_664",
+      "start_register": 570,
+      "end_register": 664,
+      "payload_hex": "0103BE0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000503234303831393133300005123720081504F65A08F200000910136A136A00000000018D01E0074F0000058E3AA8",
+      "length": 195,
+      "notify_count": 24,
+      "safety": "reassembled_function_03_read_response_only",
+      "register_count": 95,
+      "registers": [
+        {
+          "register": 570,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 571,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 572,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 573,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 574,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 575,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 576,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 577,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 578,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 579,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 580,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 581,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 582,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 583,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 584,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 585,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 586,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 587,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 588,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 589,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 590,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 591,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 592,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 593,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 594,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 595,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 596,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 597,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 598,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 599,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 600,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 601,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 602,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 603,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 604,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 605,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 606,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 607,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 608,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 609,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 610,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 611,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 612,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 613,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 614,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 615,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 616,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 617,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 618,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 619,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 620,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 621,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 622,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 623,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 624,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 625,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 626,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 627,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 628,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 629,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 630,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 631,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 632,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 633,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 634,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 635,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 636,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 637,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 638,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 639,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 640,
+          "hex": "0300",
+          "uint": 768,
+          "int": 768
+        },
+        {
+          "register": 641,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 642,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 643,
+          "hex": "5032",
+          "uint": 20530,
+          "int": 20530
+        },
+        {
+          "register": 644,
+          "hex": "3430",
+          "uint": 13360,
+          "int": 13360
+        },
+        {
+          "register": 645,
+          "hex": "3831",
+          "uint": 14385,
+          "int": 14385
+        },
+        {
+          "register": 646,
+          "hex": "3931",
+          "uint": 14641,
+          "int": 14641
+        },
+        {
+          "register": 647,
+          "hex": "3330",
+          "uint": 13104,
+          "int": 13104
+        },
+        {
+          "register": 648,
+          "hex": "0005",
+          "uint": 5,
+          "int": 5
+        },
+        {
+          "register": 649,
+          "hex": "1237",
+          "uint": 4663,
+          "int": 4663
+        },
+        {
+          "register": 650,
+          "hex": "2008",
+          "uint": 8200,
+          "int": 8200
+        },
+        {
+          "register": 651,
+          "hex": "1504",
+          "uint": 5380,
+          "int": 5380
+        },
+        {
+          "register": 652,
+          "hex": "f65a",
+          "uint": 63066,
+          "int": -2470
+        },
+        {
+          "register": 653,
+          "hex": "08f2",
+          "uint": 2290,
+          "int": 2290
+        },
+        {
+          "register": 654,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 655,
+          "hex": "0910",
+          "uint": 2320,
+          "int": 2320
+        },
+        {
+          "register": 656,
+          "hex": "136a",
+          "uint": 4970,
+          "int": 4970
+        },
+        {
+          "register": 657,
+          "hex": "136a",
+          "uint": 4970,
+          "int": 4970
+        },
+        {
+          "register": 658,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 659,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 660,
+          "hex": "018d",
+          "uint": 397,
+          "int": 397
+        },
+        {
+          "register": 661,
+          "hex": "01e0",
+          "uint": 480,
+          "int": 480
+        },
+        {
+          "register": 662,
+          "hex": "074f",
+          "uint": 1871,
+          "int": 1871
+        },
+        {
+          "register": 663,
+          "hex": "0000",
+          "uint": 0,
+          "int": 0
+        },
+        {
+          "register": 664,
+          "hex": "058e",
+          "uint": 1422,
+          "int": 1422
+        }
+      ]
+    }
+  ]
+}

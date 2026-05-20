@@ -1,0 +1,4 @@
+# Full-flash device backups may contain Wi-Fi credentials, API tokens, and NVS data.
+# Keep them local only.
+*
+!.gitignore

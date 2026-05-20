@@ -1,0 +1,14 @@
+[Unit]
+Description=Lumentree Flash Site
+After=network.target
+
+[Service]
+Type=simple
+User=mrlinh
+WorkingDirectory=/home/mrlinh/esp32-lumentree
+ExecStart=/usr/bin/python3 /home/mrlinh/esp32-lumentree/host/flash-site/server.py --host 127.0.0.1 --port 8790
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

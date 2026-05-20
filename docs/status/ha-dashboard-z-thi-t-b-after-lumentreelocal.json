@@ -1,0 +1,798 @@
+{
+  "views": [
+    {
+      "type": "sections",
+      "max_columns": 4,
+      "title": "Solar",
+      "path": "solar",
+      "sections": [
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "custom:nlk-3d-energy-card",
+              "max_power": 1,
+              "buy_price": 3000,
+              "sell_price": 2000,
+              "currency": "đ",
+              "language": "vi",
+              "battery_invert": true,
+              "dots_per_line": 3,
+              "show_self_sufficiency": true,
+              "colors": {},
+              "entities": {
+                "solar": "sensor.lumentree_local_p240819130_pv_power",
+                "solar_daily": "sensor.lumentree_local_p240819130_daily_pv_energy",
+                "grid": "sensor.lumentree_local_p240819130_grid_power",
+                "grid_buy_daily": "sensor.lumentree_local_p240819130_daily_grid_import_energy",
+                "grid_sell_daily": "sensor.lumentree_local_p240819130_daily_grid_export_energy",
+                "battery_soc": "sensor.lumentree_local_p240819130_battery_soc",
+                "battery_power": "sensor.lumentree_local_p240819130_battery_power",
+                "battery_daily_charge": "sensor.lumentree_local_p240819130_daily_battery_charge_energy",
+                "battery_daily_discharge": "sensor.lumentree_local_p240819130_daily_battery_discharge_energy",
+                "load": "sensor.lumentree_local_p240819130_load_power",
+                "load_daily": "sensor.lumentree_local_p240819130_daily_load_energy",
+                "inverter_temp": "sensor.lumentree_local_p240819130_device_temperature",
+                "pv1": "sensor.lumentree_local_p240819130_pv1_power",
+                "pv2": "sensor.lumentree_local_p240819130_pv2_power"
+              },
+              "battery_capacity": 14,
+              "card_size": "normal",
+              "flow_style": "dots",
+              "compact_mode": true
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "custom:button-card",
+              "entity": "sensor.lumentree_local_p240819130_daily_pv_energy",
+              "show_icon": false,
+              "show_name": false,
+              "show_state": false,
+              "tap_action": {
+                "action": "none"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "border-radius": "20px"
+                  },
+                  {
+                    "background": "linear-gradient(145deg,"
+                  },
+                  {
+                    "border": "1px solid rgba(255, 215, 0, 0.15)"
+                  },
+                  {
+                    "box-shadow": "0 0 15px rgba(255, 140, 0, 0.1)"
+                  },
+                  {
+                    "overflow": "visible"
+                  }
+                ],
+                "grid": [
+                  {
+                    "grid-template-areas": "\"header\" \"row_forecast_today\" \"row_production\" \"row_forecast_tomorrow\""
+                  },
+                  {
+                    "grid-template-columns": "1fr"
+                  },
+                  {
+                    "grid-template-rows": "min-content min-content min-content min-content"
+                  },
+                  {
+                    "row-gap": "0px"
+                  }
+                ]
+              },
+              "custom_fields": {
+                "header": "[[[\n  return `<div style=\"\n    display: flex; align-items: center; justify-content: center;\n    margin-bottom: 20px;\n  \">\n    <span style=\"\n      font-size: 1.2rem; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;\n      background: -webkit-linear-gradient(45deg, #FFD700, #FF8C00);\n      -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n    \">Năng lượng mặt trời</span>\n  </div>`;\n]]]\n",
+                "row_forecast_today": "[[[\n  const state = states['sensor.solcast_pv_forecast_forecast_today'].state;\n  const unit = states['sensor.solcast_pv_forecast_forecast_today'].attributes.unit_of_measurement || 'kWh';\n  return `\n  <div style=\"\n    display: flex; align-items: center; justify-content: space-between;\n    background: rgba(255, 215, 0, 0.05); border: 1px solid rgba(255, 215, 0, 0.2);\n    border-radius: 12px; padding: 12px; margin-bottom: 12px;\n  \">\n    <div style=\"display: flex; align-items: center; gap: 12px;\">\n      <ha-icon icon=\"mdi:weather-sunny\" style=\"color: #FFD700; width: 24px; height: 24px; filter: drop-shadow(0 0 5px rgba(255,215,0,0.6));\"></ha-icon>\n      <span style=\"color: #ddd; font-weight: 500; font-size: 0.95rem;\">Dự báo hôm nay</span>\n    </div>\n    <span style=\"\n      font-weight: bold; font-size: 1.1rem;\n      background: -webkit-linear-gradient(0deg, #FFD700, #FFA500);\n      -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n    \">${state} <span style=\"font-size: 0.8rem; opacity: 0.7; color: #FFD700; -webkit-text-fill-color: #FFD700;\">${unit}</span></span>\n  </div>`;\n]]]\n",
+                "row_production": "[[[\n  const state = states['sensor.lumentree_local_p240819130_daily_pv_energy'].state;\n  const unit = states['sensor.lumentree_local_p240819130_daily_pv_energy'].attributes.unit_of_measurement || 'kWh';\n  return `\n  <style>\n    @keyframes pulse-sun {\n      0% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255, 69, 0, 0.5)); }\n      50% { transform: scale(1.2); filter: drop-shadow(0 0 10px rgba(255, 69, 0, 1)); }\n      100% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255, 69, 0, 0.5)); }\n    }\n  </style>\n  <div style=\"\n    display: flex; align-items: center; justify-content: space-between;\n    background: rgba(255, 69, 0, 0.1); border: 1px solid rgba(255, 69, 0, 0.4);\n    box-shadow: 0 0 10px rgba(255, 69, 0, 0.15); border-radius: 12px;\n    padding: 14px; margin-bottom: 12px;\n  \">\n    <div style=\"display: flex; align-items: center; gap: 12px;\">\n      <div style=\"animation: pulse-sun 3s infinite ease-in-out;\">\n        <ha-icon icon=\"mdi:solar-power-variant\" style=\"color: #ff4500; width: 28px; height: 28px;\"></ha-icon>\n      </div>\n      <span style=\"color: white; font-weight: 700; font-size: 1rem; text-transform: uppercase;\">Sản lượng thực tế</span>\n    </div>\n    <span style=\"\n      font-weight: 900; font-size: 1.3rem;\n      background: -webkit-linear-gradient(0deg, #ff4500, #ffae00);\n      -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n      text-shadow: 0 0 15px rgba(255, 69, 0, 0.3);\n    \">${state} <span style=\"font-size: 0.8rem; opacity: 0.7; color: #ff4500; -webkit-text-fill-color: #ff4500;\">${unit}</span></span>\n  </div>`;\n]]]\n",
+                "row_forecast_tomorrow": "[[[\n  const state = states['sensor.solcast_pv_forecast_forecast_tomorrow'].state;\n  const unit = states['sensor.solcast_pv_forecast_forecast_tomorrow'].attributes.unit_of_measurement || 'kWh';\n  return `\n  <div style=\"\n    display: flex; align-items: center; justify-content: space-between;\n    background: rgba(0, 191, 255, 0.05); border: 1px solid rgba(0, 191, 255, 0.2);\n    border-radius: 12px; padding: 12px;\n  \">\n    <div style=\"display: flex; align-items: center; gap: 12px;\">\n      <ha-icon icon=\"mdi:weather-partly-cloudy\" style=\"color: #00bfff; width: 24px; height: 24px; filter: drop-shadow(0 0 5px rgba(0,191,255,0.6));\"></ha-icon>\n      <span style=\"color: #ddd; font-weight: 500; font-size: 0.95rem;\">Dự báo ngày mai</span>\n    </div>\n    <span style=\"\n      font-weight: bold; font-size: 1.1rem;\n      background: -webkit-linear-gradient(0deg, #00bfff, #1e90ff);\n      -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n    \">${state} <span style=\"font-size: 0.8rem; opacity: 0.7; color: #00bfff; -webkit-text-fill-color: #00bfff;\">${unit}</span></span>\n  </div>`;\n]]]\n"
+              }
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "custom:button-card",
+              "entity": "sensor.lumentree_local_p240819130_battery_soc",
+              "show_icon": true,
+              "show_state": false,
+              "show_name": false,
+              "tap_action": {
+                "action": "more-info"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "border-radius": "20px"
+                  },
+                  {
+                    "height": "220px"
+                  },
+                  {
+                    "position": "relative"
+                  },
+                  {
+                    "overflow": "hidden"
+                  },
+                  {
+                    "background": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  let baseBg = 'linear-gradient(145deg, #1c1c1c, #262626)';\n  \n  if (power < 0) { \n     // Âm (< 0): Đang SẠC -> Màu Xanh (Green)\n     return `${baseBg}, box-shadow: 0 0 20px rgba(0, 255, 127, 0.3), inset 0 0 2px rgba(0, 255, 127, 0.5)`;\n  } else if (power > 0) { \n     // Dương (> 0): Đang XẢ -> Màu Đỏ (Red)\n     return `${baseBg}, box-shadow: 0 0 20px rgba(255, 99, 71, 0.3), inset 0 0 2px rgba(255, 99, 71, 0.5)`;\n  }\n  // Nghỉ: Viền sáng trắng nhẹ\n  return `${baseBg}, box-shadow: 0 0 10px rgba(255, 255, 255, 0.1)`;\n]]]\n"
+                  },
+                  {
+                    "border": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  if (power < 0) return '1px solid rgba(0, 255, 127, 0.5)'; // Sạc - Xanh\n  if (power > 0) return '1px solid rgba(255, 99, 71, 0.5)';  // Xả - Đỏ\n  return '1px solid rgba(255, 255, 255, 0.1)';\n]]]\n"
+                  }
+                ],
+                "icon": [
+                  {
+                    "color": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  if (power < 0) return 'rgba(0, 255, 127, 0.8)'; // Sạc - Xanh\n  if (power > 0) return 'rgba(255, 99, 71, 0.8)';  // Xả - Đỏ\n  return 'var(--state-icon-color)';\n]]]\n"
+                  },
+                  {
+                    "width": "120px"
+                  },
+                  {
+                    "height": "120px"
+                  },
+                  {
+                    "position": "absolute"
+                  },
+                  {
+                    "top": "50%"
+                  },
+                  {
+                    "left": "50%"
+                  },
+                  {
+                    "transform": "translate(-50%, -50%)"
+                  },
+                  {
+                    "opacity": 0.15
+                  },
+                  {
+                    "filter": "blur(5px)"
+                  }
+                ],
+                "custom_fields": {
+                  "soc": [
+                    {
+                      "position": "absolute"
+                    },
+                    {
+                      "top": "45%"
+                    },
+                    {
+                      "left": "50%"
+                    },
+                    {
+                      "transform": "translate(-50%, -50%)"
+                    },
+                    {
+                      "font-size": "3rem"
+                    },
+                    {
+                      "font-weight": 900
+                    },
+                    {
+                      "z-index": 2
+                    },
+                    {
+                      "background": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  // Sạc (Âm): Xanh lá -> Xanh dương\n  if (power < 0) return '-webkit-linear-gradient(45deg, #00ff7f, #00bfff)';\n  // Xả (Dương): Đỏ cam -> Vàng\n  if (power > 0) return '-webkit-linear-gradient(45deg, #ff6347, #ffcc00)';\n  return 'var(--text-primary-color)';\n]]]\n"
+                    },
+                    {
+                      "-webkit-background-clip": "text"
+                    },
+                    {
+                      "-webkit-text-fill-color": "transparent"
+                    },
+                    {
+                      "filter": "drop-shadow(0px 0px 5px rgba(0,0,0,0.5))"
+                    }
+                  ],
+                  "power": [
+                    {
+                      "position": "absolute"
+                    },
+                    {
+                      "top": "65%"
+                    },
+                    {
+                      "left": "50%"
+                    },
+                    {
+                      "transform": "translate(-50%, 0)"
+                    },
+                    {
+                      "font-size": "1.3rem"
+                    },
+                    {
+                      "font-weight": "bold"
+                    },
+                    {
+                      "z-index": 2
+                    },
+                    {
+                      "color": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  if (power < 0) return '#00ff7f'; // Sạc - Xanh\n  if (power > 0) return '#ff6347'; // Xả - Đỏ\n  return 'var(--primary-text-color)';\n]]]\n"
+                    },
+                    {
+                      "text-shadow": "0px 0px 10px currentColor"
+                    }
+                  ],
+                  "top_left": [
+                    {
+                      "position": "absolute"
+                    },
+                    {
+                      "top": "16px"
+                    },
+                    {
+                      "left": "16px"
+                    },
+                    {
+                      "text-align": "left"
+                    },
+                    {
+                      "border-left": "3px solid rgba(255,255,255,0.3)"
+                    },
+                    {
+                      "padding-left": "8px"
+                    }
+                  ],
+                  "top_right": [
+                    {
+                      "position": "absolute"
+                    },
+                    {
+                      "top": "16px"
+                    },
+                    {
+                      "right": "16px"
+                    },
+                    {
+                      "text-align": "right"
+                    },
+                    {
+                      "border-right": "3px solid rgba(255,255,255,0.3)"
+                    },
+                    {
+                      "padding-right": "8px"
+                    }
+                  ],
+                  "bottom_left": [
+                    {
+                      "position": "absolute"
+                    },
+                    {
+                      "bottom": "16px"
+                    },
+                    {
+                      "left": "16px"
+                    },
+                    {
+                      "text-align": "left"
+                    },
+                    {
+                      "border-left": "3px solid rgba(255,255,255,0.3)"
+                    },
+                    {
+                      "padding-left": "8px"
+                    }
+                  ],
+                  "bottom_right": [
+                    {
+                      "position": "absolute"
+                    },
+                    {
+                      "bottom": "16px"
+                    },
+                    {
+                      "right": "16px"
+                    },
+                    {
+                      "text-align": "right"
+                    },
+                    {
+                      "border-right": "3px solid rgba(255,255,255,0.3)"
+                    },
+                    {
+                      "padding-right": "8px"
+                    }
+                  ]
+                }
+              },
+              "custom_fields": {
+                "soc": "[[[\n  const soc = parseFloat(states['sensor.lumentree_local_p240819130_battery_soc'].state) || 0;\n  return `${soc.toFixed(0)}%`;\n]]]\n",
+                "power": "[[[\n  const adjustedPower = parseFloat(states['sensor.battery_power_adjusted'].state) || 0;\n  // LOGIC: Dương = Xả, Âm = Sạc, ~0 = Nghỉ\n  const prefix = adjustedPower > 0 ? 'Xả: ' : adjustedPower < 0 ? 'Sạc: ' : 'Nghỉ: ';\n  return `${prefix}${Math.abs(adjustedPower).toFixed(0)} W`;\n]]]\n",
+                "top_left": "[[[\n  const soc = parseFloat(states['sensor.lumentree_local_p240819130_battery_soc'].state) || 0;\n  const remaining = (14 * soc / 100).toFixed(1);\n  \n  const adjustedPower = parseFloat(states['sensor.battery_power_adjusted'].state) || 0;\n  const chargePowerAbs = Math.abs(adjustedPower);\n  let timeLabel = 'Thời gian:';\n  let timeStr = '—';\n\n  if (chargePowerAbs >= 10) {\n    let hoursTotal = 0;\n    \n    if (adjustedPower > 0) { \n       // Dương: ĐANG XẢ -> Tính thời gian CẠN (Empty)\n       timeLabel = 'Cạn sau:';\n       hoursTotal = (14 * (soc / 100)) / (chargePowerAbs / 1000);\n    } else { \n       // Âm: ĐANG SẠC -> Tính thời gian ĐẦY (Full)\n       timeLabel = 'Đầy sau:';\n       hoursTotal = (14 * (1 - soc / 100)) / (chargePowerAbs / 1000);\n    }\n\n    if (isFinite(hoursTotal)) {\n      const h = Math.floor(hoursTotal);\n      const m = Math.round((hoursTotal - h) * 60);\n      timeStr = `${h}h ${m}m`;\n    }\n  }\n\n  const labelStyle = 'color: var(--text-secondary-color); font-size: 0.8rem;';\n  const valStyle = 'color: white; font-weight: bold; font-size: 0.9rem;';\n\n  return `\n    <div><span style=\"${labelStyle}\">Tổng pin:</span> <span style=\"${valStyle}\">14 số</span></div>\n    <div><span style=\"${labelStyle}\">Còn lại:</span> <span style=\"${valStyle}\">${remaining} số</span></div>\n    <div style=\"margin-top: 4px;\"><span style=\"${labelStyle}\">${timeLabel}</span> <br><span style=\"${valStyle}; font-size: 1rem; color: var(--primary-color)\">${timeStr}</span></div>\n  `;\n]]]\n",
+                "top_right": "[[[\n  const charge = parseFloat(states['sensor.lumentree_local_p240819130_daily_battery_charge_energy'].state) || 0;\n  const discharge = parseFloat(states['sensor.lumentree_local_p240819130_daily_battery_discharge_energy'].state) || 0;\n  \n  const labelStyle = 'color: var(--text-secondary-color); font-size: 0.8rem;';\n  const chargeValStyle = 'color: #00ff7f; font-weight: bold; font-size: 0.9rem;';\n  const dischargeValStyle = 'color: #ff6347; font-weight: bold; font-size: 0.9rem;';\n\n  return `\n    <div><span style=\"${labelStyle}\">Sạc hôm nay:</span> <span style=\"${chargeValStyle}\">${charge.toFixed(1)} số</span></div>\n    <div><span style=\"${labelStyle}\">Xả hôm nay:</span> <span style=\"${dischargeValStyle}\">${discharge.toFixed(1)} số</span></div>\n  `;\n]]]\n",
+                "bottom_right": "[[[\n  const load = states['sensor.tai_tong_nha'].state;\n  const cost = parseFloat(states['sensor.tien_phai_tra_neu_khong_co_nlmt'].state);\n  const costStr = isNaN(cost) ? 'N/A' : `${cost.toLocaleString('vi-VN')} đ`;\n\n  const labelStyle = 'color: var(--text-secondary-color); font-size: 0.8rem;';\n  const valStyle = 'color: white; font-weight: bold; font-size: 0.9rem;';\n\n  return `\n    <div><span style=\"${labelStyle}\">Số điện:</span><br><span style=\"${valStyle}\">${load} số</span></div>\n    <div style=\"margin-top: 4px;\"><span style=\"${labelStyle}\">Tiền thực:</span><br><span style=\"${valStyle}\">${costStr}</span></div>\n  `;\n]]]\n"
+              }
+            }
+          ]
+        }
+      ],
+      "header": {
+        "layout": "center",
+        "badges_position": "bottom",
+        "badges_wrap": "wrap"
+      }
+    },
+    {
+      "title": "Thiết bị trong nhà",
+      "sections": [
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Sân ngoài",
+              "heading_style": "title"
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "show_state": true,
+              "entity": "switch.cong_tac_den_san_va_tuyp_1_2_switch_1",
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "show_state": true,
+              "entity": "switch.cong_tac_den_san_va_tuyp_1_2_switch_2",
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "entity": "switch.cong_tac_den_san_va_tuyp_1_2_switch_3",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              },
+              "entity": "switch.o_cam_xe_dien",
+              "name": "Sạc xe máy điện"
+            },
+            {
+              "type": "tile",
+              "entity": "scene.bat_tivi",
+              "features_position": "bottom",
+              "vertical": false,
+              "name": "Tắt và bật TIVI"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Phòng khách",
+              "heading_style": "title"
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "entity": "switch.cong_tac_den_va_quat_tran_switch_1",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "entity": "switch.cong_tac_den_va_quat_tran_switch_2",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "entity": "switch.cong_tac_den_va_quat_tran_switch_4",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "entity": "switch.cong_tac_den_va_quat_tran_switch_3",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading_style": "title",
+              "heading": "Bếp"
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "entity": "switch.binh_nuoc_nong_switch_1",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              },
+              "name": "Bình nóng"
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "entity": "switch.bep_switch_1",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "entity": "switch.bep_switch_2",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "show_name": true,
+              "show_icon": true,
+              "type": "button",
+              "entity": "switch.bep_switch_3",
+              "show_state": true,
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            }
+          ],
+          "column_span": 1
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading_style": "title",
+              "heading": "Điều hoà",
+              "icon": "mdi:air-conditioner",
+              "tap_action": {
+                "action": "perform-action",
+                "perform_action": ""
+              }
+            },
+            {
+              "type": "entities",
+              "entities": [
+                {
+                  "type": "button",
+                  "name": "Bật",
+                  "icon": "mdi:fan",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "scene.turn_on",
+                    "target": {
+                      "entity_id": "scene.mo_dieu_hoa_phong_khach"
+                    }
+                  },
+                  "card_mod": {
+                    "style": ":host, ha-entity-row {\n  --paper-item-icon-color: green !important;\n  color: yellow !important;\n}\n"
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "Tắt",
+                  "icon": "mdi:fan-off",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "scene.turn_on",
+                    "target": {
+                      "entity_id": "scene.tat_dieu_hoa_phong_khach"
+                    }
+                  },
+                  "card_mod": {
+                    "style": ":host, ha-entity-row {\n  --paper-item-icon-color: red !important;\n  color: red !important;\n}\n"
+                  }
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 3
+              },
+              "title": "Phòng Khách",
+              "state_color": false
+            },
+            {
+              "type": "entities",
+              "entities": [
+                {
+                  "type": "button",
+                  "name": "Bật",
+                  "icon": "mdi:fan",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "scene.turn_on",
+                    "target": {
+                      "entity_id": "scene.bat_dieu_hoa_mitshu"
+                    }
+                  },
+                  "card_mod": {
+                    "style": ":host, ha-entity-row {\n  --paper-item-icon-color: green !important;\n  color: yellow !important;\n}\n"
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "Tắt",
+                  "icon": "mdi:fan-off",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "scene.turn_on",
+                    "target": {
+                      "entity_id": "scene.tat_dieu_hoa_mitshu"
+                    }
+                  },
+                  "card_mod": {
+                    "style": ":host, ha-entity-row {\n  --paper-item-icon-color: red !important;\n  color: red !important;\n}\n"
+                  }
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 3
+              },
+              "title": "Phòng Ngủ Lớn",
+              "state_color": false
+            },
+            {
+              "type": "entities",
+              "entities": [
+                {
+                  "type": "button",
+                  "name": "Bật",
+                  "icon": "mdi:fan",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "scene.turn_on",
+                    "target": {
+                      "entity_id": "scene.bat_dieu_hoa_phong_ngu_nho"
+                    }
+                  },
+                  "card_mod": {
+                    "style": ":host, ha-entity-row {\n  --paper-item-icon-color: green !important;\n  color: yellow !important;\n}\n"
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "Tắt",
+                  "icon": "mdi:fan-off",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "scene.turn_on",
+                    "target": {
+                      "entity_id": "scene.tat_dieu_hoa_phong_ngu_nho"
+                    }
+                  },
+                  "card_mod": {
+                    "style": ":host, ha-entity-row {\n  --paper-item-icon-color: red !important;\n  color: red !important;\n}\n"
+                  }
+                }
+              ],
+              "grid_options": {
+                "columns": 12,
+                "rows": 3
+              },
+              "title": "Phòng Ngủ Nhỏ",
+              "state_color": false
+            }
+          ]
+        }
+      ],
+      "type": "sections",
+      "cards": [],
+      "background": {
+        "opacity": 33,
+        "alignment": "center",
+        "size": "cover",
+        "repeat": "repeat",
+        "attachment": "scroll"
+      },
+      "max_columns": 3,
+      "visible": [
+        {
+          "user": "b7a4ee103d8e4e59b2b3aa39425819fb"
+        },
+        {
+          "user": "d25d06dfc86a42a7b07e0a2cd50a36c5"
+        }
+      ]
+    },
+    {
+      "type": "sections",
+      "visible": [
+        {
+          "user": "b7a4ee103d8e4e59b2b3aa39425819fb"
+        }
+      ],
+      "sections": [
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading_style": "title",
+              "heading": "EVN SWITCH"
+            },
+            {
+              "type": "tile",
+              "entity": "switch.evn_wifi_smart_meter_protector_switch"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.evn_wifi_smart_meter_protector_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.evn_wifi_smart_meter_protector_current"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.evn_wifi_smart_meter_protector_voltage"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading_style": "title",
+              "heading": "LOAD SWITCH"
+            },
+            {
+              "type": "tile",
+              "entity": "switch.load_smart_meter_protector_switch"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.load_smart_meter_protector_power"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.load_smart_meter_protector_current"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.load_smart_meter_protector_voltage"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading_style": "title",
+              "heading": "Sạc xe máy điện"
+            },
+            {
+              "type": "tile",
+              "features_position": "bottom",
+              "vertical": false,
+              "name": "Sạc xe điện",
+              "entity": "switch.o_cam_xe_dien"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.sac_xe_dien_power",
+              "features_position": "bottom",
+              "vertical": false,
+              "name": "Công suất"
+            },
+            {
+              "type": "tile",
+              "features_position": "bottom",
+              "vertical": false,
+              "name": "Dòng điện",
+              "entity": "sensor.sac_xe_dien_voltage"
+            },
+            {
+              "type": "tile",
+              "features_position": "bottom",
+              "vertical": false,
+              "name": "Voltage",
+              "entity": "sensor.sac_xe_dien_current"
+            }
+          ]
+        }
+      ],
+      "max_columns": 4,
+      "title": "Wifi Aptomat",
+      "cards": []
+    },
+    {
+      "type": "sections",
+      "max_columns": 4,
+      "title": "Hẹn giờ hàng ngày bật tắt",
+      "path": "h-n-gi-hang-ngay-b-t-t-t",
+      "sections": [
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Hẹn giờ",
+              "heading_style": "title"
+            },
+            {
+              "type": "custom:scheduler-card",
+              "display_options": {
+                "secondary_info": [
+                  "relative-time",
+                  "days",
+                  "time",
+                  "additional-tasks"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

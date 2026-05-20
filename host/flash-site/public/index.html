@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lumentree Local Flash</title>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --line: #30363d;
+      --text: #e6edf3;
+      --muted: #9da7b3;
+      --accent: #2f81f7;
+      --accent-2: #1f6feb;
+      --warn: #d29922;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 40px 20px 56px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 2rem;
+      line-height: 1.1;
+    }
+    .lead {
+      color: var(--muted);
+      margin: 0 0 28px;
+      line-height: 1.6;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .badge {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .lang-switch {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .lang-switch button {
+      background: transparent;
+      color: var(--muted);
+      border: 0;
+      padding: 10px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .lang-switch button.active {
+      background: rgba(47, 129, 247, 0.16);
+      color: var(--text);
+    }
+    .warn {
+      border-left: 3px solid var(--warn);
+      padding: 12px 14px;
+      background: rgba(210, 153, 34, 0.08);
+      color: #f2cc60;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .flash-box {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 14px;
+    }
+    esp-web-install-button::part(button) {
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      padding: 14px 20px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    p, li {
+      line-height: 1.6;
+    }
+    ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    code {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.9em;
+    }
+    .small {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    a {
+      color: #58a6ff;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="topbar">
+      <div>
+        <h1 data-i18n="title">Lumentree Local Flash</h1>
+        <p class="lead" data-i18n="lead">
+          Nạp firmware cầu nối BLE Lumentree cho ESP32-S3 qua WebSerial.
+          Trang này chỉ dùng để nạp qua USB. Sau khi firmware khởi động, vào portal để cấu hình Wi-Fi, API URL, token và thông số thiết bị.
+        </p>
+      </div>
+      <div class="lang-switch" aria-label="Language switch">
+        <button id="lang-vi" type="button" class="active">VI</button>
+        <button id="lang-en" type="button">EN</button>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="meta">
+        <span class="badge" data-i18n="badge_board">Board: ESP32-S3</span>
+        <span class="badge" id="firmware-version-badge">Firmware: đang tải...</span>
+        <span class="badge" data-i18n="badge_transport">Kết nối: USB WebSerial</span>
+        <span class="badge" data-i18n="badge_flash">Flash tối thiểu: 8MB</span>
+        <span class="badge" data-i18n="badge_psram">PSRAM: tùy chọn</span>
+      </div>
+
+      <div class="warn" data-i18n="warn">
+        Nạp firmware sẽ ghi đè firmware hiện tại trên thiết bị. Cần cáp USB có dữ liệu. Nên dùng Chrome hoặc Edge trên máy tính.
+      </div>
+
+      <p class="small" data-i18n="supported">
+        Hỗ trợ chính thức: ESP32-S3 có flash từ 8MB trở lên. Các board dưới 8MB flash không được hỗ trợ trong dòng firmware này.
+      </p>
+
+      <div class="flash-box">
+        <esp-web-install-button manifest="/firmware/flash-manifest.json">
+          <span slot="activate" data-i18n="flash_button">Nạp firmware</span>
+          <span slot="unsupported" data-i18n="flash_unsupported">Trình duyệt này không hỗ trợ WebSerial</span>
+          <span slot="not-allowed" data-i18n="flash_https">WebSerial yêu cầu HTTPS</span>
+        </esp-web-install-button>
+        <p class="small" data-i18n="port_hint">
+          Nếu cổng serial không hiện ra, giữ board vào boot mode hoặc rút cắm USB lại một lần.
+        </p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 data-i18n="after_title">Sau khi nạp</h2>
+      <ol>
+        <li data-i18n="after_1">Chờ ESP32 tự khởi động lại.</li>
+        <li data-i18n="after_2">Kết nối vào AP <code>Lumentree-XXXX</code>.</li>
+        <li data-i18n="after_3">Mở <code>http://192.168.4.1</code>.</li>
+        <li data-i18n="after_4">Nhập Wi-Fi và các thông số production trong portal.</li>
+        <li data-i18n="after_5">Xác nhận telemetry đã lên được Lumentree Local API trước khi thêm control trong Home Assistant.</li>
+      </ol>
+    </section>
+
+    <section class="panel">
+      <h2 data-i18n="write_title">Nếu cần write control</h2>
+      <ol>
+        <li data-i18n="write_1">Sau khi ESP32 đã online và đang đẩy telemetry, mở lại <code>http://192.168.4.1</code>.</li>
+        <li data-i18n="write_2">Vào mục <code>Write Access</code> và bấm <code>Generate write pairing code</code>.</li>
+        <li data-i18n="write_3">Lấy mã vừa sinh ra và mở <code>Lumentree Local</code> trong Home Assistant.</li>
+        <li data-i18n="write_4">Vào options của integration, nhập <code>Write pairing code</code> để claim quyền write.</li>
+        <li data-i18n="write_5">Chỉ sau khi claim thành công mới nên dùng switch, number và time entity để chỉnh cài đặt inverter.</li>
+      </ol>
+      <p class="small" data-i18n="write_note">
+        Đây là mã pairing ngắn hạn, dùng một lần. Không có write code thì integration chỉ nên được dùng ở chế độ đọc.
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2 data-i18n="notes_title">Ghi chú provisioning</h2>
+      <p>
+        <span data-i18n="notes_body">Thiết bị mới không cần MAC inverter hardcode sẵn. Có thể pair sau provisioning khi hệ thống chỉ tìm thấy đúng một inverter candidate phù hợp.</span>
+      </p>
+      <p class="small">
+        <span data-i18n="source_repo">Source repository:</span>
+        <a href="https://github.com/nlkcodenew/lumentreelocal" target="_blank" rel="noreferrer">nlkcodenew/lumentreelocal</a>
+      </p>
+    </section>
+  </main>
+  <script>
+    const translations = {
+      vi: {
+        title: "Lumentree Local Flash",
+        lead: "Nạp firmware cầu nối BLE Lumentree cho ESP32-S3 qua WebSerial. Trang này chỉ dùng để nạp qua USB. Sau khi firmware khởi động, vào portal để cấu hình Wi-Fi, API URL, token và thông số thiết bị.",
+        badge_board: "Board: ESP32-S3",
+        badge_transport: "Kết nối: USB WebSerial",
+        badge_flash: "Flash tối thiểu: 8MB",
+        badge_psram: "PSRAM: tùy chọn",
+        warn: "Nạp firmware sẽ ghi đè firmware hiện tại trên thiết bị. Cần cáp USB có dữ liệu. Nên dùng Chrome hoặc Edge trên máy tính.",
+        supported: "Hỗ trợ chính thức: ESP32-S3 có flash từ 8MB trở lên. Các board dưới 8MB flash không được hỗ trợ trong dòng firmware này.",
+        flash_button: "Nạp firmware",
+        flash_unsupported: "Trình duyệt này không hỗ trợ WebSerial",
+        flash_https: "WebSerial yêu cầu HTTPS",
+        port_hint: "Nếu cổng serial không hiện ra, giữ board vào boot mode hoặc rút cắm USB lại một lần.",
+        after_title: "Sau khi nạp",
+        after_1: "Chờ ESP32 tự khởi động lại.",
+        after_2: "Kết nối vào AP <code>Lumentree-XXXX</code>.",
+        after_3: "Mở <code>http://192.168.4.1</code>.",
+        after_4: "Nhập Wi-Fi và các thông số production trong portal.",
+        after_5: "Xác nhận telemetry đã lên được Lumentree Local API trước khi thêm control trong Home Assistant.",
+        write_title: "Nếu cần write control",
+        write_1: "Sau khi ESP32 đã online và đang đẩy telemetry, mở lại <code>http://192.168.4.1</code>.",
+        write_2: "Vào mục <code>Write Access</code> và bấm <code>Generate write pairing code</code>.",
+        write_3: "Lấy mã vừa sinh ra và mở <code>Lumentree Local</code> trong Home Assistant.",
+        write_4: "Vào options của integration, nhập <code>Write pairing code</code> để claim quyền write.",
+        write_5: "Chỉ sau khi claim thành công mới nên dùng switch, number và time entity để chỉnh cài đặt inverter.",
+        write_note: "Đây là mã pairing ngắn hạn, dùng một lần. Không có write code thì integration chỉ nên được dùng ở chế độ đọc.",
+        notes_title: "Ghi chú provisioning",
+        notes_body: "Thiết bị mới không cần MAC inverter hardcode sẵn. Có thể pair sau provisioning khi hệ thống chỉ tìm thấy đúng một inverter candidate phù hợp.",
+        source_repo: "Source repository:",
+        firmware_loading: "Firmware: đang tải...",
+        firmware_unavailable: "Firmware: không truy cập được"
+      },
+      en: {
+        title: "Lumentree Local Flash",
+        lead: "Flash the dedicated ESP32-S3 Lumentree BLE bridge firmware over WebSerial. This page is only for USB flashing. After the firmware boots, use the portal to configure Wi-Fi, API URL, token, and device settings.",
+        badge_board: "Board: ESP32-S3",
+        badge_transport: "Transport: USB WebSerial",
+        badge_flash: "Flash Requirement: 8MB minimum",
+        badge_psram: "PSRAM: optional",
+        warn: "Flashing rewrites the current device firmware. Use a USB data cable. Chrome or Edge on desktop is recommended.",
+        supported: "Official support target: ESP32-S3 boards with 8MB flash or larger. Boards with less than 8MB flash are not supported by this firmware line.",
+        flash_button: "Flash Firmware",
+        flash_unsupported: "This browser does not support WebSerial",
+        flash_https: "WebSerial requires HTTPS",
+        port_hint: "If the serial port does not appear, hold the board in boot mode or reconnect USB once.",
+        after_title: "After Flash",
+        after_1: "Wait for the ESP32 to reboot.",
+        after_2: "Connect to the AP <code>Lumentree-XXXX</code>.",
+        after_3: "Open <code>http://192.168.4.1</code>.",
+        after_4: "Enter Wi-Fi credentials and production settings in the portal.",
+        after_5: "Confirm telemetry reaches the Lumentree Local API before adding Home Assistant controls.",
+        write_title: "If you need write controls",
+        write_1: "After the ESP32 is online and uploading telemetry, open <code>http://192.168.4.1</code> again.",
+        write_2: "Go to <code>Write Access</code> and press <code>Generate write pairing code</code>.",
+        write_3: "Copy the generated code and open <code>Lumentree Local</code> in Home Assistant.",
+        write_4: "Open the integration options and enter the <code>Write pairing code</code> to claim write access.",
+        write_5: "Only after the claim succeeds should you use switch, number, and time entities to change inverter settings.",
+        write_note: "This is a short-lived one-time pairing code. Without a valid code, the integration should stay read-only.",
+        notes_title: "Provisioning Notes",
+        notes_body: "New devices do not need a hardcoded inverter MAC. Pairing can happen after provisioning when the system finds exactly one matching inverter candidate.",
+        source_repo: "Source repository:",
+        firmware_loading: "Firmware: loading...",
+        firmware_unavailable: "Firmware: unavailable"
+      }
+    };
+
+    let currentLanguage = "vi";
+
+    function setLanguage(lang) {
+      currentLanguage = lang;
+      document.documentElement.lang = lang;
+      document.querySelectorAll("[data-i18n]").forEach((node) => {
+        const key = node.dataset.i18n;
+        const value = translations[lang][key];
+        if (value) {
+          node.innerHTML = value;
+        }
+      });
+
+      document.getElementById("lang-vi").classList.toggle("active", lang === "vi");
+      document.getElementById("lang-en").classList.toggle("active", lang === "en");
+    }
+
+    document.getElementById("lang-vi").addEventListener("click", () => setLanguage("vi"));
+    document.getElementById("lang-en").addEventListener("click", () => setLanguage("en"));
+    setLanguage("vi");
+
+    fetch("/firmware/flash-manifest.json", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((manifest) => {
+        const version = manifest.version || "unknown";
+        const badge = document.getElementById("firmware-version-badge");
+        if (badge) {
+          badge.textContent = `Firmware: lumentree-ble-bridge ${version}`;
+        }
+      })
+      .catch(() => {
+        const badge = document.getElementById("firmware-version-badge");
+        if (badge) {
+          badge.textContent = translations[currentLanguage].firmware_unavailable;
+        }
+      });
+  </script>
+</body>
+</html>
