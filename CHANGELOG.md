@@ -12,6 +12,16 @@ This project follows a simple release flow for HACS:
 
 - No unreleased changes.
 
+## [0.14.12] - 2026-05-20
+
+### Added
+
+- Initial setup now claims a required read grant from an ESP32 portal pairing token, with an optional separate write pairing token for guarded inverter writes.
+
+### Fixed
+
+- Write grant status now uses the active write grant token so Home Assistant diagnostics reflect granted write access correctly.
+
 ## [0.14.11] - 2026-05-20
 
 ### Added

@@ -11,6 +11,7 @@ LOGGER = logging.getLogger(__package__)
 CONF_API_URL = "api_url"
 CONF_API_TOKEN = "api_token"
 CONF_DEVICE_ID = "device_id"
+CONF_READ_GRANT_TOKEN = "read_grant_token"
 CONF_WRITE_GRANT_TOKEN = "write_grant_token"
 SERVICE_DRY_RUN_COMMAND = "dry_run_command"
 SERVICE_SET_FIRST_DISCHARGE_TARGET_SOC = "set_first_discharge_target_soc"

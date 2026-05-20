@@ -22,26 +22,34 @@ class LumentreeLocalNotFoundError(LumentreeLocalApiError):
 class LumentreeLocalApiClient:
     """Small async client for the local server."""
 
-    def __init__(self, session: ClientSession, api_url: str, token: str | None = None) -> None:
+    def __init__(
+        self,
+        session: ClientSession,
+        api_url: str,
+        read_token: str | None = None,
+        write_token: str | None = None,
+    ) -> None:
         self._session = session
         self._api_url = api_url.rstrip("/")
-        self._token = token or ""
+        self._read_token = read_token or ""
+        self._write_token = write_token or ""
 
     @property
     def api_url(self) -> str:
         """Return configured API URL."""
         return self._api_url
 
-    def _headers(self) -> dict[str, str]:
+    def _headers(self, token: str | None = None) -> dict[str, str]:
         headers: dict[str, str] = {}
-        if self._token:
-            headers["Authorization"] = f"Bearer {self._token}"
+        effective_token = token if token is not None else self._read_token
+        if effective_token:
+            headers["Authorization"] = f"Bearer {effective_token}"
         return headers
 
-    async def _get(self, path: str) -> dict[str, Any]:
+    async def _get(self, path: str, token: str | None = None) -> dict[str, Any]:
         url = f"{self._api_url}{path}"
         try:
-            async with self._session.get(url, headers=self._headers(), timeout=10) as response:
+            async with self._session.get(url, headers=self._headers(token), timeout=10) as response:
                 if response.status in (401, 403):
                     raise LumentreeLocalAuthError("invalid API token")
                 if response.status == 404:
@@ -60,10 +68,10 @@ class LumentreeLocalApiClient:
             raise LumentreeLocalApiError(f"GET {path} returned non-object JSON")
         return data
 
-    async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async def _post(self, path: str, payload: dict[str, Any], token: str | None = None) -> dict[str, Any]:
         url = f"{self._api_url}{path}"
         try:
-            async with self._session.post(url, headers=self._headers(), json=payload, timeout=10) as response:
+            async with self._session.post(url, headers=self._headers(token), json=payload, timeout=10) as response:
                 if response.status in (401, 403):
                     raise LumentreeLocalAuthError("invalid API token")
                 if response.status == 404:
@@ -112,11 +120,21 @@ class LumentreeLocalApiClient:
 
     async def write_grant_status(self, device_id: str) -> dict[str, Any]:
         """Fetch write grant status for one device."""
-        return await self._get(f"/api/lumentree/devices/{device_id}/write-grants/status")
+        return await self._get(
+            f"/api/lumentree/devices/{device_id}/write-grants/status",
+            token=self._write_token or None,
+        )
 
     async def command_status(self, device_id: str) -> dict[str, Any]:
         """Fetch latest redacted command status for one device."""
         return await self._get(f"/api/lumentree/devices/{device_id}/commands/status")
+
+    async def claim_read_grant(self, device_id: str, token: str) -> dict[str, Any]:
+        """Claim a scoped read grant using a one-time ESP32 portal token."""
+        return await self._post(
+            f"/api/lumentree/devices/{device_id}/read-grants/claim",
+            {"token": token},
+        )
 
     async def claim_write_grant(self, device_id: str, code: str) -> dict[str, Any]:
         """Claim a scoped write grant using a one-time ESP32 portal code."""
@@ -127,7 +145,19 @@ class LumentreeLocalApiClient:
 
     async def revoke_write_grant(self, device_id: str) -> dict[str, Any]:
         """Revoke the configured scoped write grant."""
-        return await self._post(f"/api/lumentree/devices/{device_id}/write-grants/revoke", {})
+        return await self._post(
+            f"/api/lumentree/devices/{device_id}/write-grants/revoke",
+            {},
+            token=self._write_token,
+        )
+
+    async def revoke_read_grant(self, device_id: str) -> dict[str, Any]:
+        """Revoke the configured scoped read grant."""
+        return await self._post(
+            f"/api/lumentree/devices/{device_id}/read-grants/revoke",
+            {},
+            token=self._read_token,
+        )
 
     async def create_dry_run_command(
         self,
@@ -145,6 +175,7 @@ class LumentreeLocalApiClient:
                 "requested_by": "home_assistant",
                 "payload": payload or {},
             },
+            token=self._write_token,
         )
 
     async def create_target_soc_command(self, device_id: str, target_soc: int) -> dict[str, Any]:
@@ -158,6 +189,7 @@ class LumentreeLocalApiClient:
                 "requested_by": "home_assistant",
                 "payload": {"target_soc": target_soc},
             },
+            token=self._write_token,
         )
 
     async def create_discharge_target_soc_command(self, device_id: str, slot: int, target_soc: int) -> dict[str, Any]:
@@ -171,6 +203,7 @@ class LumentreeLocalApiClient:
                 "requested_by": "home_assistant",
                 "payload": {"slot": slot, "target_soc": target_soc},
             },
+            token=self._write_token,
         )
 
     async def create_discharge_power_command(self, device_id: str, slot: int, power: int) -> dict[str, Any]:
@@ -184,6 +217,7 @@ class LumentreeLocalApiClient:
                 "requested_by": "home_assistant",
                 "payload": {"slot": slot, "power": power},
             },
+            token=self._write_token,
         )
 
     async def create_discharge_time_enable_command(self, device_id: str, slot: int, enabled: bool) -> dict[str, Any]:
@@ -197,6 +231,7 @@ class LumentreeLocalApiClient:
                 "requested_by": "home_assistant",
                 "payload": {"slot": slot, "enabled": 1 if enabled else 0},
             },
+            token=self._write_token,
         )
 
     async def create_discharge_time_command(
@@ -218,6 +253,7 @@ class LumentreeLocalApiClient:
                 "requested_by": "home_assistant",
                 "payload": {"slot": slot, "time": time_value},
             },
+            token=self._write_token,
         )
 
     async def create_mains_charge_target_soc_command(self, device_id: str, slot: int, target_soc: int) -> dict[str, Any]:
@@ -231,6 +267,7 @@ class LumentreeLocalApiClient:
                 "requested_by": "home_assistant",
                 "payload": {"slot": slot, "target_soc": target_soc},
             },
+            token=self._write_token,
         )
 
     async def create_mains_charge_time_enable_command(self, device_id: str, slot: int, enabled: bool) -> dict[str, Any]:
@@ -244,6 +281,7 @@ class LumentreeLocalApiClient:
                 "requested_by": "home_assistant",
                 "payload": {"slot": slot, "enabled": 1 if enabled else 0},
             },
+            token=self._write_token,
         )
 
     async def create_mains_charge_time_command(
@@ -265,4 +303,5 @@ class LumentreeLocalApiClient:
                 "requested_by": "home_assistant",
                 "payload": {"slot": slot, "time": time_value},
             },
+            token=self._write_token,
         )

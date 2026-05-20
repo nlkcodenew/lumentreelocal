@@ -31,6 +31,11 @@ Settings -> Devices & services -> Add Integration -> Lumentree Local
 
 The integration asks for the inverter `Device ID`.
 
+With the current onboarding flow, initial setup also requires:
+
+- a `read pairing token` from the ESP32 local portal
+- an optional `write pairing token` if Home Assistant should be allowed to send guarded inverter setting changes
+
 ## What The Integration Exposes
 
 - realtime inverter metrics

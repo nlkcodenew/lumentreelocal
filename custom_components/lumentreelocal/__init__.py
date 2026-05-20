@@ -15,6 +15,7 @@ from .const import (
     CONF_API_TOKEN,
     CONF_API_URL,
     CONF_DEVICE_ID,
+    CONF_READ_GRANT_TOKEN,
     CONF_WRITE_GRANT_TOKEN,
     DEFAULT_API_URL,
     DOMAIN,
@@ -242,10 +243,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.config_entries.async_update_entry(entry, title="Lumentree Local")
 
     api_url = entry.data.get(CONF_API_URL, DEFAULT_API_URL)
-    api_token = (
-        entry.options.get(CONF_WRITE_GRANT_TOKEN)
+    read_token = (
+        entry.options.get(CONF_READ_GRANT_TOKEN)
+        or entry.data.get(CONF_READ_GRANT_TOKEN, "")
         or entry.options.get(CONF_API_TOKEN)
         or entry.data.get(CONF_API_TOKEN, "")
+    )
+    write_token = (
+        entry.options.get(CONF_WRITE_GRANT_TOKEN)
+        or entry.data.get(CONF_WRITE_GRANT_TOKEN, "")
     )
     device_id = entry.options.get(CONF_DEVICE_ID) or entry.data[CONF_DEVICE_ID]
 
@@ -262,7 +268,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             new_entity_id=new_entity_id,
         )
 
-    client = LumentreeLocalApiClient(async_get_clientsession(hass), api_url, api_token)
+    client = LumentreeLocalApiClient(async_get_clientsession(hass), api_url, read_token, write_token)
     coordinator = LumentreeLocalCoordinator(hass, client, device_id)
 
     try:
