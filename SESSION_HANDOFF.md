@@ -25,6 +25,11 @@ remote = origin
 
 1. `START_HERE.md`
 2. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
+3. `docs/specs/2026-05-20-multi-user-read-claim-spec.md` if the next session
+   discusses shared-server or multi-user access control
+4. `docs/specs/2026-05-20-read-write-token-claim-flow-spec.md` if the next
+   session discusses the chosen replacement for AP-portal API token entry and
+   grant-based read/write onboarding
 
 ## Current Baseline
 
@@ -33,6 +38,13 @@ remote = origin
 - Local API bind: `127.0.0.1:8787`
 - Flash site local bind: `127.0.0.1:8790`
 - Home Assistant domain: `lumentreelocal`
+- Current production decision: keep the existing simple read flow for now;
+  multi-user read protection is deferred and recorded in
+  `docs/specs/2026-05-20-multi-user-read-claim-spec.md`
+- Chosen future auth direction: AP mode should become Wi-Fi-only onboarding,
+  LAN portal should generate required read token and optional write token, and
+  HASS should claim `read_grant`/`write_grant` with `Device ID`; see
+  `docs/specs/2026-05-20-read-write-token-claim-flow-spec.md`
 
 ## Operational Rule
 
