@@ -1,72 +1,50 @@
 # Session Handoff
 
-Continue work in:
+Continue private runtime work in:
 
 ```text
 /home/mrlinh/esp32-lumentree
 ```
 
-Canonical repo:
+This checkout must stay on:
 
 ```text
-https://github.com/nlkcodenew/lumentreelocal
+branch = local-only
+remote = private
+```
+
+Public HACS work is separate:
+
+```text
+/home/mrlinh/esp32-lumentree-public
+branch = main
+remote = origin
 ```
 
 ## Read First
 
-1. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
-2. `README.md`
-3. `firmware/README.md`
-4. `docs/status/2026-05-19-hacs-release-flow.md`
+1. `START_HERE.md`
+2. `LOCAL_ONLY_WORKFLOW.md`
+3. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
 
 ## Current Baseline
 
-- Current repo HEAD: `e3117de`
+- Private runtime branch HEAD should be checked with `git whereami`
 - Production API: `https://lumentree.jonah.io.vn`
 - Local API bind: `127.0.0.1:8787`
+- Flash site local bind: `127.0.0.1:8790`
 - Home Assistant domain: `lumentreelocal`
-- Firmware release env:
-  `firmware/platformio.ini -> [env:esp32-s3-8mb-nopsram-release]`
-- Firmware release version source:
-  `firmware/platformio.ini -> 0.15.1`
-- Integration version source:
-  `custom_components/lumentreelocal/manifest.json -> 0.14.11`
 
-## Operational Truth
+## Operational Rule
 
-The standard runbook already reflects the verified state from 2026-05-20:
-
-- firmware flash procedure
-- function `0x04` validation with `READ_STATS_ONCE`
-- Postgres verification for `today_statistics_0_7`
-- HACS update check for `update.lumentree_local_update`
-- HASS reload first, full restart only if needed
-
-Do not reconstruct these steps from older status docs unless the runbook is
-being intentionally updated.
-
-## What Matters Most
-
-- Architecture stays:
-
-```text
-Inverter -> BLE -> ESP32 -> HTTPS API -> Home Assistant
-```
-
-- BLE is only between inverter and ESP32.
-- ESP32 and Home Assistant both use the HTTP API server, not MQTT.
-- Write flow is guarded and semantic, not generic raw register write.
+- Commit private runtime changes here before flash/deploy.
+- Push private runtime changes to `private`.
+- Do not use this checkout for public-only HACS cleanup or release commits.
 
 ## Next-Session Rule
 
-Before changing anything:
+Before doing any work:
 
-1. confirm which surface is in scope: firmware, server, integration, or docs
-2. read the matching primary doc
-3. verify live/runtime truth if the task depends on current state
-
-After each successful task:
-
-1. commit
-2. push
-3. record the result in repo docs
+1. run `git whereami`
+2. confirm whether the task is private runtime or public HACS
+3. switch checkout if needed before editing

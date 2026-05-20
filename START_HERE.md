@@ -1,68 +1,78 @@
-# START HERE: ESP32 Lumentree
+# START HERE: PRIVATE Runtime Checkout
 
-Every new Codex session must read this file first.
+Every new session must read this file first.
 
-Open Codex sessions in:
+This checkout is:
 
 ```text
 /home/mrlinh/esp32-lumentree
 ```
 
-Canonical repo:
+Branch role:
 
 ```text
-https://github.com/nlkcodenew/lumentreelocal
+local-only
 ```
 
-Do not continue active Lumentree work in:
+Remote role:
 
 ```text
-/home/mrlinh/esp32-s3-openclaw
+private -> https://github.com/nlkcodenew/lumentreelocal-private
+```
+
+This checkout is for:
+
+- firmware
+- flash-site
+- local server and host-side runtime work
+- private docs, evidence, handoff, and operational scripts
+
+Do not treat this checkout as the public HACS repo.
+
+Public-safe work belongs in:
+
+```text
+/home/mrlinh/esp32-lumentree-public
 ```
 
 ## Read Order
 
-1. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
+1. `LOCAL_ONLY_WORKFLOW.md`
 2. `SESSION_HANDOFF.md`
-3. `README.md`
-4. `firmware/README.md`
+3. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
+4. `README.md`
+5. `firmware/README.md`
 
-Then only open deeper docs that match the task:
+## Push Rules
 
-- firmware / function `0x04`:
-  `docs/specs/2026-05-20-function-04-firmware-integration-spec.md`
-- server / production API:
-  `docs/specs/2026-05-17-lumentree-local-vendor-server.md`
-- write safety:
-  `docs/plans/2026-05-17-write-safety-plan.md`
-- HACS release flow:
-  `docs/status/2026-05-19-hacs-release-flow.md`
+- For this checkout, `git push` must go to `private`.
+- Do not push this branch to `origin`.
+- Before flashing new firmware, commit here first.
 
-## Repo Index
+## Scope Index
 
 - `firmware/`: ESP32 firmware
-- `custom_components/lumentreelocal/`: Home Assistant integration
+- `host/flash-site/`: flash website and firmware files served from this machine
 - `host/local-server/`: local API server
-- `host/flash-site/`: public flash site
-- `docs/status/`: runbooks and rollout notes
-- `docs/specs/`: implementation specs
+- `docs/`: private notes, evidence, specs, runbooks
+- `custom_components/lumentreelocal/`: integration code when a task truly spans runtime and integration
 
 ## Stable Facts
 
 - Production API: `https://lumentree.jonah.io.vn`
 - Local API bind: `127.0.0.1:8787`
+- Flash site local bind: `127.0.0.1:8790`
 - Home Assistant domain: `lumentreelocal`
-- Standard firmware release env:
-  `firmware/platformio.ini -> [env:esp32-s3-8mb-nopsram-release]`
 
-Avoid treating old session snapshots as current truth. For flash, function
-`0x04`, HA update, and HASS reload/restart decisions, the 2026-05-20 runbook
-is the operational source of truth.
+## Session Rule
 
-## Working Rules
+Before editing anything, confirm whether the task belongs to:
 
-- Verify runtime truth before changing behavior.
-- Keep firmware, server, and integration scope separate unless the task
-  explicitly crosses them.
-- Do not add inverter-setting writes without explicit approval.
-- After each successful task, commit, push, and record the result in repo docs.
+1. private runtime checkout
+2. public HACS checkout
+
+If unsure, run:
+
+```bash
+git whereami
+```
