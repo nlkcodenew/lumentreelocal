@@ -1,0 +1,159 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Lumentree Local",
+        "description": "Enter the Lumentree inverter device ID.",
+        "data": {
+          "device_id": "Device ID"
+        }
+      },
+      "init": {
+        "title": "Lumentree Local",
+        "description": "Update the inverter Device ID. Warning: any write-capable entity in this integration changes inverter settings directly on the inverter. Keep the integration read-only unless you intend to modify inverter behavior. To enable production write access, open the ESP32 portal, generate a one-time write pairing code, and enter it here.",
+        "data": {
+          "device_id": "Device ID",
+          "write_pairing_code": "Write pairing code for direct inverter changes",
+          "revoke_write_access": "Revoke current write access",
+          "keep_write_grant": "Keep current write access enabled"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the local Lumentree server",
+      "invalid_write_pairing_code": "The write pairing code is invalid, expired, or the ESP32 gateway is not online",
+      "invalid_write_grant": "The current write grant could not be revoked",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This Lumentree Local device is already configured"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "pv_power": {"name": "PV power"},
+      "pv1_power": {"name": "PV1 power"},
+      "pv2_power": {"name": "PV2 power"},
+      "grid_power": {"name": "Grid power"},
+      "load_power": {"name": "Load power"},
+      "battery_power": {"name": "Battery power"},
+      "ac_input_power": {"name": "AC input power"},
+      "ac_output_power": {"name": "AC output power"},
+      "ac_output_va": {"name": "AC output apparent power"},
+      "battery_soc": {"name": "Battery SOC"},
+      "battery_voltage": {"name": "Battery voltage"},
+      "battery_current": {"name": "Battery current"},
+      "grid_voltage": {"name": "Grid voltage"},
+      "ac_input_voltage": {"name": "AC input voltage"},
+      "ac_output_voltage": {"name": "AC output voltage"},
+      "pv1_voltage": {"name": "PV1 voltage"},
+      "pv2_voltage": {"name": "PV2 voltage"},
+      "ac_input_frequency": {"name": "AC input frequency"},
+      "ac_output_frequency": {"name": "AC output frequency"},
+      "device_temperature": {"name": "Device temperature"},
+      "battery_status": {"name": "Battery status"},
+      "grid_status": {"name": "Grid status"},
+      "battery_type": {"name": "Battery type"},
+      "device_type_code": {"name": "Device type code"},
+      "device_power_rating_code": {"name": "Device power rating code"},
+      "device_power_rating_w": {"name": "Device power rating"},
+      "mqtt_device_sn": {"name": "Device SN"},
+      "master_slave_status": {"name": "Master/slave status"},
+      "today_pv_generation_kwh": {"name": "Today PV generation"},
+      "today_essential_load_kwh": {"name": "Today essential load"},
+      "today_total_load_kwh": {"name": "Today total load"},
+      "today_grid_import_kwh": {"name": "Today grid import"},
+      "today_battery_charge_kwh": {"name": "Today battery charge"},
+      "today_battery_discharge_kwh": {"name": "Today battery discharge"},
+      "daily_pv_kwh": {"name": "Daily PV energy"},
+      "daily_load_kwh": {"name": "Daily load energy"},
+      "daily_grid_in_kwh": {"name": "Daily grid import energy"},
+      "daily_grid_out_kwh": {"name": "Daily grid export energy"},
+      "daily_battery_charge_kwh": {"name": "Daily battery charge energy"},
+      "daily_battery_discharge_kwh": {"name": "Daily battery discharge energy"},
+      "daily_ac_input_kwh": {"name": "Daily AC input energy"},
+      "daily_ac_output_kwh": {"name": "Daily AC output energy"},
+      "monthly_pv_kwh": {"name": "Monthly PV energy"},
+      "monthly_load_kwh": {"name": "Monthly load energy"},
+      "monthly_grid_in_kwh": {"name": "Monthly grid import energy"},
+      "monthly_grid_out_kwh": {"name": "Monthly grid export energy"},
+      "monthly_battery_charge_kwh": {"name": "Monthly battery charge energy"},
+      "monthly_battery_discharge_kwh": {"name": "Monthly battery discharge energy"},
+      "monthly_ac_input_kwh": {"name": "Monthly AC input energy"},
+      "monthly_ac_output_kwh": {"name": "Monthly AC output energy"},
+      "yearly_pv_kwh": {"name": "Yearly PV energy"},
+      "yearly_load_kwh": {"name": "Yearly load energy"},
+      "yearly_grid_in_kwh": {"name": "Yearly grid import energy"},
+      "yearly_grid_out_kwh": {"name": "Yearly grid export energy"},
+      "yearly_battery_charge_kwh": {"name": "Yearly battery charge energy"},
+      "yearly_battery_discharge_kwh": {"name": "Yearly battery discharge energy"},
+      "yearly_ac_input_kwh": {"name": "Yearly AC input energy"},
+      "yearly_ac_output_kwh": {"name": "Yearly AC output energy"},
+      "total_pv_kwh": {"name": "Total PV energy"},
+      "total_load_kwh": {"name": "Total load energy"},
+      "total_grid_in_kwh": {"name": "Total grid import energy"},
+      "total_grid_out_kwh": {"name": "Total grid export energy"},
+      "total_battery_charge_kwh": {"name": "Total battery charge energy"},
+      "total_battery_discharge_kwh": {"name": "Total battery discharge energy"},
+      "total_ac_input_kwh": {"name": "Total AC input energy"},
+      "total_ac_output_kwh": {"name": "Total AC output energy"},
+      "latest_age_seconds": {"name": "Latest telemetry age"},
+      "avg_sample_interval_seconds": {"name": "Average sample interval"},
+      "max_sample_gap_seconds": {"name": "Maximum sample gap"},
+      "samples_last_hour": {"name": "Samples last hour"},
+      "total_sample_count": {"name": "Total sample count"},
+      "uptime_seconds": {"name": "ESP32 uptime"},
+      "gateway_id": {"name": "Gateway ID"},
+      "firmware": {"name": "Firmware"},
+      "pairing_status": {"name": "Pairing status"},
+      "target_mac": {"name": "Target BLE MAC"},
+      "candidate_count": {"name": "BLE candidate count"},
+      "write_access_status": {"name": "Direct inverter write status"},
+      "last_command_status": {"name": "Last command status"},
+      "last_command_name": {"name": "Last command name"},
+      "last_command_time": {"name": "Last command time"},
+      "last_command_safety": {"name": "Last command safety"},
+      "last_command_error": {"name": "Last command error"}
+    },
+    "binary_sensor": {
+      "online_status": {"name": "Online status"},
+      "is_ups_mode": {"name": "UPS mode"},
+      "battery_connected": {"name": "Battery connected"},
+      "write_grant_active": {"name": "Direct inverter write access"}
+    },
+    "number": {
+      "mains_charge_slot_1_target_soc": {"name": "Mains charge slot 1 target SOC"},
+      "mains_charge_slot_2_target_soc": {"name": "Mains charge slot 2 target SOC"},
+      "discharge_slot_1_target_soc": {"name": "Discharge slot 1 target SOC"},
+      "discharge_slot_2_target_soc": {"name": "Discharge slot 2 target SOC"},
+      "discharge_slot_3_target_soc": {"name": "Discharge slot 3 target SOC"},
+      "discharge_slot_4_target_soc": {"name": "Discharge slot 4 target SOC"},
+      "discharge_slot_1_power": {"name": "Discharge slot 1 power"},
+      "discharge_slot_2_power": {"name": "Discharge slot 2 power"},
+      "discharge_slot_3_power": {"name": "Discharge slot 3 power"},
+      "discharge_slot_4_power": {"name": "Discharge slot 4 power"}
+    },
+    "switch": {
+      "mains_charge_slot_1_enabled": {"name": "Mains charge slot 1 enabled"},
+      "mains_charge_slot_2_enabled": {"name": "Mains charge slot 2 enabled"},
+      "discharge_slot_1_enabled": {"name": "Discharge slot 1 enabled"},
+      "discharge_slot_2_enabled": {"name": "Discharge slot 2 enabled"},
+      "discharge_slot_3_enabled": {"name": "Discharge slot 3 enabled"},
+      "discharge_slot_4_enabled": {"name": "Discharge slot 4 enabled"}
+    },
+    "time": {
+      "mains_charge_slot_1_start_time": {"name": "Mains charge slot 1 start time"},
+      "mains_charge_slot_1_end_time": {"name": "Mains charge slot 1 end time"},
+      "mains_charge_slot_2_start_time": {"name": "Mains charge slot 2 start time"},
+      "mains_charge_slot_2_end_time": {"name": "Mains charge slot 2 end time"},
+      "discharge_slot_1_start_time": {"name": "Discharge slot 1 start time"},
+      "discharge_slot_1_end_time": {"name": "Discharge slot 1 end time"},
+      "discharge_slot_2_start_time": {"name": "Discharge slot 2 start time"},
+      "discharge_slot_2_end_time": {"name": "Discharge slot 2 end time"},
+      "discharge_slot_3_start_time": {"name": "Discharge slot 3 start time"},
+      "discharge_slot_3_end_time": {"name": "Discharge slot 3 end time"},
+      "discharge_slot_4_start_time": {"name": "Discharge slot 4 start time"},
+      "discharge_slot_4_end_time": {"name": "Discharge slot 4 end time"}
+    }
+  }
+}

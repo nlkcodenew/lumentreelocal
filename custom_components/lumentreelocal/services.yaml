@@ -1,0 +1,192 @@
+dry_run_command:
+  name: Create dry-run command
+  description: Queue a dry-run command for the ESP32 gateway. Requires a scoped write grant and never writes to the inverter.
+  fields:
+    device_id:
+      name: Device ID
+      description: Lumentree inverter Device ID. Defaults to the configured entry Device ID.
+      required: false
+      selector:
+        text:
+    command:
+      name: Command
+      description: Dry-run command name. Only dry_run_noop is currently supported.
+      required: false
+      default: dry_run_noop
+      selector:
+        select:
+          options:
+            - dry_run_noop
+
+set_first_discharge_target_soc:
+  name: Set first discharge target SOC
+  description: Queue a guarded write command for the First discharge time Target SOC setting. Requires a scoped write grant.
+  fields:
+    device_id:
+      name: Device ID
+      description: Lumentree inverter Device ID. Defaults to the configured entry Device ID.
+      required: false
+      selector:
+        text:
+    target_soc:
+      name: Target SOC
+      description: Target SOC percentage for the first discharge time setting.
+      required: true
+      selector:
+        number:
+          min: 5
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
+set_discharge_target_soc:
+  name: Set discharge target SOC
+  description: Queue a guarded write command for one discharge time slot Target SOC setting. Requires a scoped write grant.
+  fields:
+    device_id:
+      name: Device ID
+      description: Lumentree inverter Device ID. Defaults to the configured entry Device ID.
+      required: false
+      selector:
+        text:
+    slot:
+      name: Slot
+      description: Discharge time slot number.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    target_soc:
+      name: Target SOC
+      description: Target SOC percentage for the discharge time slot.
+      required: true
+      selector:
+        number:
+          min: 5
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
+set_discharge_power:
+  name: Set discharge power
+  description: Queue a guarded write command for one discharge time slot power setting. Requires a scoped write grant.
+  fields:
+    device_id:
+      name: Device ID
+      description: Lumentree inverter Device ID. Defaults to the configured entry Device ID.
+      required: false
+      selector:
+        text:
+    slot:
+      name: Slot
+      description: Discharge time slot number.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    power:
+      name: Power
+      description: Discharge power in watts.
+      required: true
+      selector:
+        number:
+          min: 500
+          max: 5000
+          step: 50
+          unit_of_measurement: W
+          mode: box
+
+set_discharge_time_enable:
+  name: Set discharge time enable
+  description: Queue a guarded write command for one discharge time slot enable setting. Requires a scoped write grant.
+  fields:
+    device_id:
+      name: Device ID
+      description: Lumentree inverter Device ID. Defaults to the configured entry Device ID.
+      required: false
+      selector:
+        text:
+    slot:
+      name: Slot
+      description: Discharge time slot number.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    enabled:
+      name: Enabled
+      description: Whether this discharge time slot is enabled.
+      required: true
+      selector:
+        boolean:
+
+set_discharge_time_start:
+  name: Set discharge time start
+  description: Queue a guarded write command for one discharge time slot start time. Requires a scoped write grant.
+  fields:
+    device_id:
+      name: Device ID
+      description: Lumentree inverter Device ID. Defaults to the configured entry Device ID.
+      required: false
+      selector:
+        text:
+    slot:
+      name: Slot
+      description: Discharge time slot number.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    time:
+      name: Time
+      description: Time as HHMM, for example 2000 for 20:00.
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 2359
+          step: 1
+          mode: box
+
+set_discharge_time_end:
+  name: Set discharge time end
+  description: Queue a guarded write command for one discharge time slot end time. Requires a scoped write grant.
+  fields:
+    device_id:
+      name: Device ID
+      description: Lumentree inverter Device ID. Defaults to the configured entry Device ID.
+      required: false
+      selector:
+        text:
+    slot:
+      name: Slot
+      description: Discharge time slot number.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    time:
+      name: Time
+      description: Time as HHMM, for example 0800 for 08:00.
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 2359
+          step: 1
+          mode: box

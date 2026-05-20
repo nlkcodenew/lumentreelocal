@@ -1,0 +1,13 @@
+{
+  "domain": "lumentreelocal",
+  "name": "Lumentree Local",
+  "codeowners": ["@nlkcodenew"],
+  "config_flow": true,
+  "documentation": "https://github.com/nlkcodenew/lumentreelocal",
+  "issue_tracker": "https://github.com/nlkcodenew/lumentreelocal/issues",
+  "iot_class": "local_polling",
+  "integration_type": "device",
+  "loggers": ["custom_components.lumentreelocal"],
+  "requirements": [],
+  "version": "0.14.11"
+}

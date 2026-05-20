@@ -1,0 +1,25 @@
+.pio/
+.venv/
+__pycache__/
+*.pyc
+logs/
+*.jsonl
+.env
+
+# Keep this public repo limited to the HACS integration surface.
+docs/
+firmware/
+host/
+tools/
+
+# Local operator/session notes should never be committed here again.
+START_HERE.md
+SESSION_HANDOFF.md
+
+# Common local artifacts.
+*.log
+*.bin
+*.backup
+*.bak
+*.tmp
+*.swp
