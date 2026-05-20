@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Lumentree Local",
-        "description": "Enter the inverter Device ID and the required read pairing token from the ESP32 local portal. The write pairing token is optional and only needed for direct inverter setting changes.",
+        "description": "Enter the inverter Device ID and the required read pairing token from the ESP32 local portal. The write pairing token is optional and only needed for direct inverter setting changes. Tokens are shown in uppercase for clarity, but they are not case-sensitive.",
         "data": {
           "device_id": "Device ID",
           "read_pairing_token": "Read pairing token",
@@ -12,7 +12,7 @@
       },
       "init": {
         "title": "Lumentree Local",
-        "description": "Update the inverter Device ID. The read grant stays required for normal data access. Warning: any write-capable entity in this integration changes inverter settings directly on the inverter. Keep the integration read-only unless you intend to modify inverter behavior. To enable production write access, open the ESP32 portal, generate a one-time write pairing token, and enter it here.",
+        "description": "Update the inverter Device ID. The read grant stays required for normal data access. Warning: any write-capable entity in this integration changes inverter settings directly on the inverter. Keep the integration read-only unless you intend to modify inverter behavior. To enable production write access, open the ESP32 portal, generate a one-time write pairing token, and enter it here. Tokens are shown in uppercase for clarity, but they are not case-sensitive.",
         "data": {
           "device_id": "Device ID",
           "write_pairing_code": "Write pairing token for direct inverter changes",
