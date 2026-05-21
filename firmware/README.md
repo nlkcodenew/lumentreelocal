@@ -22,6 +22,54 @@ Use these first:
   - `8MB flash or larger`
   - `PSRAM optional`
 
+## Hardware Support Matrix
+
+### Officially supported
+
+- `ESP32-S3`
+- `8MB flash`
+- `no PSRAM required`
+
+This is the current tested production line and the source of truth for normal
+firmware releases.
+
+### Not supported yet
+
+- `ESP32-S3 4MB`
+- `ESP32-C3 4MB`
+- `classic ESP32 4MB`
+
+Important:
+
+- `ESP32-S3-WROOM-1-N4` is **not** a supported board for the current release
+  firmware.
+- The current firmware image uses about `1.64 MB` of app flash.
+- A normal ESP32 `4MB` default dual-OTA partition only gives about `0x140000`
+  bytes (`1.25 MB`) per app slot.
+- So the current production firmware does **not** fit the normal `4MB` app slot
+  layout.
+
+### Planned experimental targets
+
+- `ESP32-C3`
+- `classic ESP32 4MB`
+
+Only after:
+
+- a separate PlatformIO target,
+- a board-specific partition layout,
+- and explicit validation for BLE, Wi-Fi, local portal, upload path, and the
+  guarded write/safety flow.
+
+## Support Policy
+
+- Do **not** create a separate firmware project just for smaller boards.
+- If smaller hardware is supported later, keep one codebase and add separate
+  build targets such as:
+  - `esp32-s3-8mb-nopsram-release`
+  - `esp32-c3-4mb-experimental`
+  - `esp32-classic-4mb-experimental`
+
 ## Safety Model
 
 - BLE is the inverter transport.
