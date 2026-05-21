@@ -549,12 +549,12 @@ def expand_window(start_hhmm, end_hhmm):
 def windows_overlap(a_start_hhmm, a_end_hhmm, b_start_hhmm, b_end_hhmm):
     a_start, a_end = expand_window(a_start_hhmm, a_end_hhmm)
     b_start, b_end = expand_window(b_start_hhmm, b_end_hhmm)
-
-    if b_start < a_start:
-        b_start += 1440
-        b_end += 1440
-
-    return b_start < a_end and a_start < b_end
+    candidates = [
+        (b_start, b_end),
+        (b_start + 1440, b_end + 1440),
+        (b_start - 1440, b_end - 1440),
+    ]
+    return any(candidate_start < a_end and a_start < candidate_end for candidate_start, candidate_end in candidates)
 ```
 
 Important:
@@ -562,13 +562,7 @@ Important:
 - strict `<` comparison is intentional
 - touching boundaries are allowed
 - overnight windows must be normalized consistently before comparison
-
-If implementation needs full pairwise robustness beyond single-shift
-normalization, it may compare multiple shifted variants, but the visible
-behavior must still match the boundary rule above:
-
-- touching is allowed
-- only nonzero shared duration is overlap
+- implementations should compare same-day, +1440, and -1440 variants to catch overnight overlaps symmetrically
 
 ## Error Message Policy
 

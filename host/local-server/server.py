@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import hmac
 import json
@@ -289,6 +290,7 @@ ON CONFLICT (gateway_id) DO UPDATE SET
 
 
 MAX_AGGREGATION_INTERVAL_SECONDS = 300.0
+SCHEDULE_SETTINGS_MAX_AGE_SECONDS = 300
 LOCAL_TIMEZONE_NAME = "Asia/Ho_Chi_Minh"
 LOCAL_TIMEZONE = ZoneInfo(LOCAL_TIMEZONE_NAME)
 ENERGY_KEYS = (
@@ -327,6 +329,8 @@ MAINS_CHARGE_TIME_SLOTS = {1, 2}
 WRITE_PAIRING_CODE_TTL_SECONDS = 600
 READ_PAIRING_TOKEN_TTL_SECONDS = 600
 WRITE_GRANT_SCOPE = "write"
+MAINS_CHARGE_SLOTS = (1, 2)
+DISCHARGE_SLOTS = (1, 2, 3, 4)
 READ_GRANT_SCOPE = "read"
 
 
@@ -434,6 +438,90 @@ def is_valid_hhmm(value: int) -> bool:
   hours = value // 100
   minutes = value % 100
   return 0 <= hours <= 23 and 0 <= minutes <= 59
+
+
+def hhmm_to_minutes(value: int) -> int:
+  return (value // 100) * 60 + (value % 100)
+
+
+def expand_window(start_hhmm: int, end_hhmm: int) -> tuple[int, int]:
+  start = hhmm_to_minutes(start_hhmm)
+  end = hhmm_to_minutes(end_hhmm)
+  if end <= start:
+    end += 1440
+  return (start, end)
+
+
+def windows_overlap(a_start_hhmm: int, a_end_hhmm: int, b_start_hhmm: int, b_end_hhmm: int) -> bool:
+  a_start, a_end = expand_window(a_start_hhmm, a_end_hhmm)
+  b_start, b_end = expand_window(b_start_hhmm, b_end_hhmm)
+  candidates = (
+    (b_start, b_end),
+    (b_start + 1440, b_end + 1440),
+    (b_start - 1440, b_end - 1440),
+  )
+  return any(candidate_start < a_end and a_start < candidate_end for candidate_start, candidate_end in candidates)
+
+
+def schedule_state_from_settings(settings: dict[str, Any]) -> dict[str, dict[int, dict[str, Any]]]:
+  state: dict[str, dict[int, dict[str, Any]]] = {"mains_charge": {}, "discharge": {}}
+  for slot in MAINS_CHARGE_SLOTS:
+    state["mains_charge"][slot] = {
+      "enabled": settings.get(f"mains_charge_slot_{slot}_enabled"),
+      "start": settings.get(f"mains_charge_slot_{slot}_start_time"),
+      "end": settings.get(f"mains_charge_slot_{slot}_end_time"),
+    }
+  for slot in DISCHARGE_SLOTS:
+    state["discharge"][slot] = {
+      "enabled": settings.get(f"discharge_slot_{slot}_enabled"),
+      "start": settings.get(f"discharge_slot_{slot}_start_time"),
+      "end": settings.get(f"discharge_slot_{slot}_end_time"),
+    }
+  return state
+
+
+def apply_schedule_change(
+  state: dict[str, dict[int, dict[str, Any]]],
+  group: str,
+  slot: int,
+  field: str,
+  value: Any,
+) -> dict[str, dict[int, dict[str, Any]]]:
+  next_state = copy.deepcopy(state)
+  next_state[group][slot][field] = value
+  return next_state
+
+
+def validate_schedule_conflicts(state: dict[str, dict[int, dict[str, Any]]]) -> list[dict[str, Any]]:
+  conflicts: list[dict[str, Any]] = []
+  for charge_slot in MAINS_CHARGE_SLOTS:
+    charge = state["mains_charge"][charge_slot]
+    if charge.get("enabled") is not True:
+      continue
+    charge_start = charge.get("start")
+    charge_end = charge.get("end")
+    if not isinstance(charge_start, int) or not isinstance(charge_end, int):
+      continue
+    for discharge_slot in DISCHARGE_SLOTS:
+      discharge = state["discharge"][discharge_slot]
+      if discharge.get("enabled") is not True:
+        continue
+      discharge_start = discharge.get("start")
+      discharge_end = discharge.get("end")
+      if not isinstance(discharge_start, int) or not isinstance(discharge_end, int):
+        continue
+      if windows_overlap(charge_start, charge_end, discharge_start, discharge_end):
+        conflicts.append(
+          {
+            "charge_slot": charge_slot,
+            "charge_start": charge_start,
+            "charge_end": charge_end,
+            "discharge_slot": discharge_slot,
+            "discharge_start": discharge_start,
+            "discharge_end": discharge_end,
+          }
+        )
+  return conflicts
 
 
 def init_db(dsn: str) -> None:
@@ -1558,6 +1646,7 @@ class LumentreeServer:
           raise ValueError("payload.time must be an integer")
         if not is_valid_hhmm(time_value):
           raise ValueError("payload.time must be a valid HHMM value from 0 to 2359")
+      self.validate_schedule_command(device_id, command, command_payload)
 
     with self.connect() as conn:
       with conn.cursor() as cur:
@@ -1884,6 +1973,65 @@ class LumentreeServer:
       "setting_registers": setting_registers,
       "raw": row.get("raw"),
     }
+
+  def validated_schedule_state(self, device_id: str) -> dict[str, dict[int, dict[str, Any]]]:
+    snapshot = self.latest_settings(device_id)
+    if snapshot is None:
+      raise ValueError("schedule safety validation requires a fresh settings snapshot from the gateway")
+    observed_at = snapshot.get("observed_at")
+    if not isinstance(observed_at, datetime):
+      raise ValueError("schedule safety validation requires a fresh settings snapshot from the gateway")
+    age_seconds = (utc_now() - observed_at).total_seconds()
+    if age_seconds > SCHEDULE_SETTINGS_MAX_AGE_SECONDS:
+      raise ValueError("schedule safety validation requires a fresh settings snapshot from the gateway")
+    settings = snapshot.get("settings") or {}
+    if not isinstance(settings, dict) or not settings:
+      raise ValueError("schedule safety validation requires a fresh settings snapshot from the gateway")
+    return schedule_state_from_settings(settings)
+
+  def validate_schedule_command(self, device_id: str, command: str, command_payload: dict[str, Any]) -> None:
+    schedule_commands = {
+      "set_mains_charge_time_enable",
+      "set_mains_charge_time_start",
+      "set_mains_charge_time_end",
+      "set_discharge_time_enable",
+      "set_discharge_time_start",
+      "set_discharge_time_end",
+    }
+    if command not in schedule_commands:
+      return
+    state = self.validated_schedule_state(device_id)
+    if command.startswith("set_mains_charge_"):
+      group = "mains_charge"
+      slot_label = "mains charge"
+    else:
+      group = "discharge"
+      slot_label = "discharge"
+    slot = command_payload.get("slot")
+    if not isinstance(slot, int) or isinstance(slot, bool):
+      raise ValueError("payload.slot must be an integer")
+    if command.endswith("_enable"):
+      field = "enabled"
+      value = command_payload.get("enabled") == 1
+    elif command.endswith("_start"):
+      field = "start"
+      value = command_payload.get("time")
+      if state[group][slot].get("enabled") is True:
+        raise ValueError(f"turn off {slot_label} slot {slot} before changing its time window")
+    else:
+      field = "end"
+      value = command_payload.get("time")
+      if state[group][slot].get("enabled") is True:
+        raise ValueError(f"turn off {slot_label} slot {slot} before changing its time window")
+    next_state = apply_schedule_change(state, group, slot, field, value)
+    conflicts = validate_schedule_conflicts(next_state)
+    if not conflicts:
+      return
+    first = conflicts[0]
+    raise ValueError(
+      "schedule safety violation: mains charge slot "
+      f"{first['charge_slot']} overlaps discharge slot {first['discharge_slot']}"
+    )
 
   def device_health(self, device_id: str) -> dict[str, Any]:
     with self.connect() as conn:

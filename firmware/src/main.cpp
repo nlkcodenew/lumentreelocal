@@ -82,6 +82,8 @@ static const unsigned long COMMAND_POLL_INTERVAL_MS = 5000;
 static const unsigned long WRITE_PAIRING_CODE_TTL_MS = 600000;
 static const unsigned long SETTINGS_UPLOAD_INTERVAL_MS = 60000;
 static const unsigned long STATS_UPLOAD_INTERVAL_MS = 5UL * 60UL * 1000UL;
+static const uint16_t SCHEDULE_STATE_START_REGISTER = 130;
+static const uint16_t SCHEDULE_STATE_REGISTER_COUNT = 47;
 
 static BLEScan* bleScan = nullptr;
 static Preferences prefs;
@@ -130,6 +132,10 @@ static String writePairingCode;
 static unsigned long writePairingCodeExpiresMs = 0;
 static String readPairingToken;
 static unsigned long readPairingTokenExpiresMs = 0;
+static uint64_t pendingCommandResultId = 0;
+static String pendingCommandResultStatus;
+static String pendingCommandResultError;
+static String pendingCommandResultPayload;
 
 struct ModbusReadResult {
   bool ok = false;
@@ -150,6 +156,17 @@ struct BleCandidate {
   unsigned long lastSeenMs = 0;
 };
 
+struct ScheduleSlotState {
+  bool enabled = false;
+  uint16_t start = 0;
+  uint16_t end = 0;
+};
+
+struct ScheduleState {
+  ScheduleSlotState mainsCharge[2];
+  ScheduleSlotState discharge[4];
+};
+
 static std::vector<BleCandidate> bleCandidates;
 static String pairingStatus = "unconfigured";
 
@@ -166,9 +183,17 @@ static String defaultLocalHostname();
 static String localPortalUrl();
 static void ensureMdnsStarted();
 static void pollPendingCommand();
+static bool retryPendingCommandResult();
 static ModbusReadResult runModbusRead(uint16_t startRegister, uint16_t registerCount, const char* label);
 static ModbusReadResult runModbusReadInput(uint16_t startRegister, uint16_t registerCount, const char* label);
 static bool readRegisterFromResult(const ModbusReadResult& result, uint16_t startRegister, uint16_t registerAddress, uint16_t& value);
+static bool loadScheduleState(ScheduleState& state, String& errorMessage);
+static bool validateScheduleConflicts(const ScheduleState& state, String& errorMessage);
+static bool validateScheduleEnableChange(const char* group, int slot, bool enabled, String& errorMessage);
+static bool validateScheduleTimeChange(const char* group, int slot, bool isStart, uint16_t requestedTime, String& errorMessage);
+static void persistPendingCommandResult(uint64_t commandId, const char* status, JsonDocument& resultDoc, const char* error);
+static void clearPendingCommandResult();
+static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result);
 static void modbusNotifyCallback(BLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify);
 
 static void feedWatchdog() {
@@ -346,6 +371,10 @@ static void loadConfig() {
   uploadIntervalSeconds = (uint16_t)constrain(uploadIntervalSeconds, MIN_UPLOAD_INTERVAL_SECONDS, 3600);
   targetAddressTypeKnown = targetMac.length() > 0;
   pairingStatus = targetMac.length() > 0 ? "paired" : "unconfigured";
+  pendingCommandResultId = (uint64_t)prefs.getULong64("pend_cmd_id", 0);
+  pendingCommandResultStatus = prefs.getString("pend_cmd_st", "");
+  pendingCommandResultError = prefs.getString("pend_cmd_er", "");
+  pendingCommandResultPayload = prefs.getString("pend_cmd_js", "");
 }
 
 static void saveStringConfig(const char* key, const String& value) {
@@ -1299,7 +1328,54 @@ static bool postCommandResult(uint64_t commandId, const char* status, JsonDocume
   log["response"] = response.substring(0, 300);
   log["safety"] = "command_result_upload_only";
   printJson(log);
-  return httpStatus >= 200 && httpStatus < 300;
+  bool ok = httpStatus >= 200 && httpStatus < 300;
+  if (ok) {
+    if (pendingCommandResultId == commandId) {
+      clearPendingCommandResult();
+    }
+    return true;
+  }
+  persistPendingCommandResult(commandId, status, resultDoc, error);
+  return false;
+}
+
+static void persistPendingCommandResult(uint64_t commandId, const char* status, JsonDocument& resultDoc, const char* error) {
+  String resultJson;
+  serializeJson(resultDoc, resultJson);
+  pendingCommandResultId = commandId;
+  pendingCommandResultStatus = status != nullptr ? String(status) : "";
+  pendingCommandResultError = error != nullptr ? String(error) : "";
+  pendingCommandResultPayload = resultJson;
+  prefs.putULong64("pend_cmd_id", pendingCommandResultId);
+  prefs.putString("pend_cmd_st", pendingCommandResultStatus);
+  prefs.putString("pend_cmd_er", pendingCommandResultError);
+  prefs.putString("pend_cmd_js", pendingCommandResultPayload);
+}
+
+static void clearPendingCommandResult() {
+  pendingCommandResultId = 0;
+  pendingCommandResultStatus = "";
+  pendingCommandResultError = "";
+  pendingCommandResultPayload = "";
+  prefs.remove("pend_cmd_id");
+  prefs.remove("pend_cmd_st");
+  prefs.remove("pend_cmd_er");
+  prefs.remove("pend_cmd_js");
+}
+
+static bool retryPendingCommandResult() {
+  if (pendingCommandResultId == 0 || pendingCommandResultStatus.length() == 0 || pendingCommandResultPayload.length() == 0) {
+    return false;
+  }
+  JsonDocument resultDoc;
+  DeserializationError err = deserializeJson(resultDoc, pendingCommandResultPayload);
+  if (err) {
+    clearPendingCommandResult();
+    return false;
+  }
+  String errorCopy = pendingCommandResultError;
+  const char* errorPtr = errorCopy.length() > 0 ? errorCopy.c_str() : nullptr;
+  return postCommandResult(pendingCommandResultId, pendingCommandResultStatus.c_str(), resultDoc, errorPtr);
 }
 
 static bool runModbusWriteSingleRegisterFunction16(uint16_t registerAddress, uint16_t value, const char* label) {
@@ -1546,6 +1622,15 @@ static bool runSetDischargeTimeEnable(int slot, uint16_t enabled, JsonDocument& 
     result["verified"] = false;
     return false;
   }
+  if (enabled == 1 && !validateScheduleEnableChange("discharge", slot, true, errorMessage)) {
+    result["verified"] = false;
+    result["would_execute"] = false;
+    result["write_enabled"] = false;
+    result["ble_write"] = false;
+    result["modbus_write"] = false;
+    result["safety"] = "schedule_conflict_rejected_before_ble_write";
+    return false;
+  }
 
   String preLabel = "pre_read_register_" + String(reg) + "_before_enable_write";
   ModbusReadResult beforeRead = runModbusRead(reg, 1, preLabel.c_str());
@@ -1741,6 +1826,15 @@ static bool runSetMainsChargeTimeEnable(int slot, uint16_t enabled, JsonDocument
     result["verified"] = false;
     return false;
   }
+  if (enabled == 1 && !validateScheduleEnableChange("mains_charge", slot, true, errorMessage)) {
+    result["verified"] = false;
+    result["would_execute"] = false;
+    result["write_enabled"] = false;
+    result["ble_write"] = false;
+    result["modbus_write"] = false;
+    result["safety"] = "schedule_conflict_rejected_before_ble_write";
+    return false;
+  }
 
   String writeLabel = "set_mains_charge_time_enable_slot_" + String(slot) + "_register_" + String(reg);
   return writeSemanticSingleRegister(
@@ -1809,6 +1903,17 @@ static bool runSetMainsChargeTimeValue(
   if (!isValidHhmm(requestedTime)) {
     errorMessage = "time must be a valid HHMM value from 0000 to 2359";
     result["verified"] = false;
+    return false;
+  }
+  if (!validateScheduleTimeChange("mains_charge", slot, isStart, requestedTime, errorMessage)) {
+    result["verified"] = false;
+    result["would_execute"] = false;
+    result["write_enabled"] = false;
+    result["ble_write"] = false;
+    result["modbus_write"] = false;
+    result["safety"] = errorMessage.startsWith("turn off ")
+      ? "time_window_edit_requires_slot_off"
+      : "schedule_conflict_rejected_before_ble_write";
     return false;
   }
 
@@ -1933,6 +2038,17 @@ static bool runSetDischargeTimeValue(
     result["verified"] = false;
     return false;
   }
+  if (!validateScheduleTimeChange("discharge", slot, isStart, requestedTime, errorMessage)) {
+    result["verified"] = false;
+    result["would_execute"] = false;
+    result["write_enabled"] = false;
+    result["ble_write"] = false;
+    result["modbus_write"] = false;
+    result["safety"] = errorMessage.startsWith("turn off ")
+      ? "time_window_edit_requires_slot_off"
+      : "schedule_conflict_rejected_before_ble_write";
+    return false;
+  }
 
   String preLabel = "pre_read_register_" + String(reg) + "_before_discharge_time_" + fieldName + "_write";
   ModbusReadResult beforeRead = runModbusRead(reg, 1, preLabel.c_str());
@@ -2018,12 +2134,16 @@ static void executeCommand(JsonObject command) {
     return;
   }
 
+  auto postWriteResult = [&](bool ok, String& errorMessage) {
+    postCommandResult(commandId, commandResultStatusForOutcome(ok, result), result, ok ? nullptr : errorMessage.c_str());
+  };
+
   if (strcmp(mode, "write") == 0 && strcmp(commandName, "set_first_discharge_target_soc") == 0) {
     JsonObject payload = command["payload"].as<JsonObject>();
     int targetSoc = payload["target_soc"] | -1;
     String errorMessage;
     bool ok = runSetFirstDischargeTargetSoc((uint16_t)targetSoc, result, errorMessage);
-    postCommandResult(commandId, ok ? "completed" : "failed", result, ok ? nullptr : errorMessage.c_str());
+    postWriteResult(ok, errorMessage);
     return;
   }
 
@@ -2033,7 +2153,7 @@ static void executeCommand(JsonObject command) {
     int targetSoc = payload["target_soc"] | -1;
     String errorMessage;
     bool ok = runSetDischargeTargetSoc(slot, (uint16_t)targetSoc, result, errorMessage);
-    postCommandResult(commandId, ok ? "completed" : "failed", result, ok ? nullptr : errorMessage.c_str());
+    postWriteResult(ok, errorMessage);
     return;
   }
 
@@ -2043,7 +2163,7 @@ static void executeCommand(JsonObject command) {
     int power = payload["power"] | -1;
     String errorMessage;
     bool ok = runSetDischargePower(slot, (uint16_t)power, result, errorMessage);
-    postCommandResult(commandId, ok ? "completed" : "failed", result, ok ? nullptr : errorMessage.c_str());
+    postWriteResult(ok, errorMessage);
     return;
   }
 
@@ -2053,7 +2173,7 @@ static void executeCommand(JsonObject command) {
     int enabled = payload["enabled"] | -1;
     String errorMessage;
     bool ok = runSetDischargeTimeEnable(slot, (uint16_t)enabled, result, errorMessage);
-    postCommandResult(commandId, ok ? "completed" : "failed", result, ok ? nullptr : errorMessage.c_str());
+    postWriteResult(ok, errorMessage);
     return;
   }
 
@@ -2070,7 +2190,7 @@ static void executeCommand(JsonObject command) {
     String errorMessage;
     bool isStart = strcmp(commandName, "set_discharge_time_start") == 0;
     bool ok = runSetDischargeTimeValue(slot, (uint16_t)timeValue, isStart, result, errorMessage);
-    postCommandResult(commandId, ok ? "completed" : "failed", result, ok ? nullptr : errorMessage.c_str());
+    postWriteResult(ok, errorMessage);
     return;
   }
 
@@ -2080,7 +2200,7 @@ static void executeCommand(JsonObject command) {
     int targetSoc = payload["target_soc"] | -1;
     String errorMessage;
     bool ok = runSetMainsChargeTargetSoc(slot, (uint16_t)targetSoc, result, errorMessage);
-    postCommandResult(commandId, ok ? "completed" : "failed", result, ok ? nullptr : errorMessage.c_str());
+    postWriteResult(ok, errorMessage);
     return;
   }
 
@@ -2090,7 +2210,7 @@ static void executeCommand(JsonObject command) {
     int enabled = payload["enabled"] | -1;
     String errorMessage;
     bool ok = runSetMainsChargeTimeEnable(slot, (uint16_t)enabled, result, errorMessage);
-    postCommandResult(commandId, ok ? "completed" : "failed", result, ok ? nullptr : errorMessage.c_str());
+    postWriteResult(ok, errorMessage);
     return;
   }
 
@@ -2107,16 +2227,31 @@ static void executeCommand(JsonObject command) {
     String errorMessage;
     bool isStart = strcmp(commandName, "set_mains_charge_time_start") == 0;
     bool ok = runSetMainsChargeTimeValue(slot, (uint16_t)timeValue, isStart, result, errorMessage);
-    postCommandResult(commandId, ok ? "completed" : "failed", result, ok ? nullptr : errorMessage.c_str());
+    postWriteResult(ok, errorMessage);
     return;
   }
 
   postCommandResult(commandId, "rejected", result, "unsupported command");
 }
 
+static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result) {
+  if (ok) {
+    return "completed";
+  }
+  String safety = result["safety"] | "";
+  if (safety == "schedule_conflict_rejected_before_ble_write" || safety == "time_window_edit_requires_slot_off") {
+    return "rejected";
+  }
+  return "failed";
+}
+
 static void pollPendingCommand() {
   if (!productionEnabled) return;
   if (apiUrl.length() == 0 || apiToken.length() == 0 || gatewayId.length() == 0 || deviceId.length() == 0) return;
+  if (pendingCommandResultId != 0) {
+    retryPendingCommandResult();
+    return;
+  }
   unsigned long now = millis();
   if (lastCommandPollMs != 0 && now - lastCommandPollMs < COMMAND_POLL_INTERVAL_MS) return;
   lastCommandPollMs = now;
@@ -2873,6 +3008,149 @@ static bool readRegisterFromResult(const ModbusReadResult& result, uint16_t star
   size_t offset = 3 + ((size_t)offsetRegister * 2);
   if (offset + 1 >= 3 + byteCount) return false;
   value = ((uint16_t)bytes[offset] << 8) | bytes[offset + 1];
+  return true;
+}
+
+static uint16_t scheduleEnableRegister(const char* group, int slot) {
+  if (strcmp(group, "mains_charge") == 0) {
+    return mainsChargeTimeEnableRegisterForSlot(slot);
+  }
+  return dischargeTimeEnableRegisterForSlot(slot);
+}
+
+static uint16_t scheduleStartRegister(const char* group, int slot) {
+  if (strcmp(group, "mains_charge") == 0) {
+    return mainsChargeTimeStartRegisterForSlot(slot);
+  }
+  return dischargeTimeStartRegisterForSlot(slot);
+}
+
+static uint16_t scheduleEndRegister(const char* group, int slot) {
+  if (strcmp(group, "mains_charge") == 0) {
+    return mainsChargeTimeEndRegisterForSlot(slot);
+  }
+  return dischargeTimeEndRegisterForSlot(slot);
+}
+
+static int hhmmToMinutes(uint16_t value) {
+  return ((int)(value / 100) * 60) + (int)(value % 100);
+}
+
+static void expandWindow(uint16_t startHhmm, uint16_t endHhmm, int& startMinutes, int& endMinutes) {
+  startMinutes = hhmmToMinutes(startHhmm);
+  endMinutes = hhmmToMinutes(endHhmm);
+  if (endMinutes <= startMinutes) {
+    endMinutes += 1440;
+  }
+}
+
+static bool scheduleWindowsOverlap(uint16_t leftStart, uint16_t leftEnd, uint16_t rightStart, uint16_t rightEnd) {
+  int aStart = 0;
+  int aEnd = 0;
+  int bStart = 0;
+  int bEnd = 0;
+  expandWindow(leftStart, leftEnd, aStart, aEnd);
+  expandWindow(rightStart, rightEnd, bStart, bEnd);
+  const int candidateStarts[] = {bStart, bStart + 1440, bStart - 1440};
+  const int candidateEnds[] = {bEnd, bEnd + 1440, bEnd - 1440};
+  for (size_t index = 0; index < 3; index++) {
+    if (candidateStarts[index] < aEnd && aStart < candidateEnds[index]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool loadScheduleState(ScheduleState& state, String& errorMessage) {
+  ModbusReadResult read = runModbusRead(SCHEDULE_STATE_START_REGISTER, SCHEDULE_STATE_REGISTER_COUNT, "schedule_safety_snapshot");
+  if (!read.ok) {
+    errorMessage = "could not read schedule registers for safety validation";
+    return false;
+  }
+  for (int slot = 1; slot <= 2; slot++) {
+    uint16_t enabledValue = 0;
+    uint16_t startValue = 0;
+    uint16_t endValue = 0;
+    if (!readRegisterFromResult(read, SCHEDULE_STATE_START_REGISTER, mainsChargeTimeEnableRegisterForSlot(slot), enabledValue)
+      || !readRegisterFromResult(read, SCHEDULE_STATE_START_REGISTER, mainsChargeTimeStartRegisterForSlot(slot), startValue)
+      || !readRegisterFromResult(read, SCHEDULE_STATE_START_REGISTER, mainsChargeTimeEndRegisterForSlot(slot), endValue)) {
+      errorMessage = "could not decode mains charge schedule registers for safety validation";
+      return false;
+    }
+    state.mainsCharge[slot - 1].enabled = enabledValue == 1;
+    state.mainsCharge[slot - 1].start = startValue;
+    state.mainsCharge[slot - 1].end = endValue;
+  }
+  for (int slot = 1; slot <= 4; slot++) {
+    uint16_t enabledValue = 0;
+    uint16_t startValue = 0;
+    uint16_t endValue = 0;
+    if (!readRegisterFromResult(read, SCHEDULE_STATE_START_REGISTER, dischargeTimeEnableRegisterForSlot(slot), enabledValue)
+      || !readRegisterFromResult(read, SCHEDULE_STATE_START_REGISTER, dischargeTimeStartRegisterForSlot(slot), startValue)
+      || !readRegisterFromResult(read, SCHEDULE_STATE_START_REGISTER, dischargeTimeEndRegisterForSlot(slot), endValue)) {
+      errorMessage = "could not decode discharge schedule registers for safety validation";
+      return false;
+    }
+    state.discharge[slot - 1].enabled = enabledValue == 1;
+    state.discharge[slot - 1].start = startValue;
+    state.discharge[slot - 1].end = endValue;
+  }
+  return true;
+}
+
+static bool validateScheduleConflicts(const ScheduleState& state, String& errorMessage) {
+  for (int chargeSlot = 1; chargeSlot <= 2; chargeSlot++) {
+    const ScheduleSlotState& charge = state.mainsCharge[chargeSlot - 1];
+    if (!charge.enabled) continue;
+    for (int dischargeSlot = 1; dischargeSlot <= 4; dischargeSlot++) {
+      const ScheduleSlotState& discharge = state.discharge[dischargeSlot - 1];
+      if (!discharge.enabled) continue;
+      if (scheduleWindowsOverlap(charge.start, charge.end, discharge.start, discharge.end)) {
+        errorMessage = "mains charge slot " + String(chargeSlot)
+          + " overlaps discharge slot " + String(dischargeSlot);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static bool validateScheduleEnableChange(const char* group, int slot, bool enabled, String& errorMessage) {
+  if (!enabled) return true;
+  ScheduleState state;
+  if (!loadScheduleState(state, errorMessage)) return false;
+  if (strcmp(group, "mains_charge") == 0) {
+    state.mainsCharge[slot - 1].enabled = true;
+  } else {
+    state.discharge[slot - 1].enabled = true;
+  }
+  if (!validateScheduleConflicts(state, errorMessage)) {
+    errorMessage = "schedule conflict rejected before BLE write: " + errorMessage;
+    return false;
+  }
+  return true;
+}
+
+static bool validateScheduleTimeChange(const char* group, int slot, bool isStart, uint16_t requestedTime, String& errorMessage) {
+  ScheduleState state;
+  if (!loadScheduleState(state, errorMessage)) return false;
+  ScheduleSlotState* target = strcmp(group, "mains_charge") == 0
+    ? &state.mainsCharge[slot - 1]
+    : &state.discharge[slot - 1];
+  if (target->enabled) {
+    errorMessage = String("turn off ") + (strcmp(group, "mains_charge") == 0 ? "mains charge" : "discharge")
+      + " slot " + String(slot) + " before changing its time window";
+    return false;
+  }
+  if (isStart) {
+    target->start = requestedTime;
+  } else {
+    target->end = requestedTime;
+  }
+  if (!validateScheduleConflicts(state, errorMessage)) {
+    errorMessage = "schedule conflict rejected before BLE write: " + errorMessage;
+    return false;
+  }
   return true;
 }
 

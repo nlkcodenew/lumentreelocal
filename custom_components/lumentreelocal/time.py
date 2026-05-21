@@ -18,6 +18,7 @@ from .api import LumentreeLocalApiError, LumentreeLocalAuthError
 from .const import DOMAIN
 from .coordinator import LumentreeLocalCoordinator
 from .entity_helpers import lumentree_device_info, settings_available, settings_value
+from .schedule_safety import apply_schedule_change, schedule_state_from_settings, slot_enabled, validate_schedule_conflicts
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -114,6 +115,7 @@ class LumentreeLocalTime(CoordinatorEntity[LumentreeLocalCoordinator], TimeEntit
     async def async_set_value(self, value: time) -> None:
         """Queue the corresponding time write command."""
         hhmm = time_to_hhmm(value)
+        self._raise_if_time_edit_is_unsafe(hhmm)
         try:
             if self.entity_description.command_group == "mains_charge":
                 await self.coordinator.client.create_mains_charge_time_command(
@@ -139,6 +141,28 @@ class LumentreeLocalTime(CoordinatorEntity[LumentreeLocalCoordinator], TimeEntit
             raise HomeAssistantError(str(err)) from err
 
         await self.coordinator.async_request_refresh()
+
+    def _raise_if_time_edit_is_unsafe(self, hhmm: int) -> None:
+        snapshot = self.coordinator.data.get("settings", {})
+        settings = snapshot.get("settings", {}) if isinstance(snapshot, dict) else {}
+        if not isinstance(settings, dict) or not settings:
+            raise HomeAssistantError("Cannot validate schedule safety before the inverter settings snapshot is loaded.")
+        state = schedule_state_from_settings(settings)
+        group = self.entity_description.command_group
+        slot = self.entity_description.slot
+        if slot_enabled(state, group, slot):
+            if group == "mains_charge":
+                raise HomeAssistantError(f"Turn off mains charge slot {slot} before changing its time window.")
+            raise HomeAssistantError(f"Turn off discharge slot {slot} before changing its time window.")
+        next_state = apply_schedule_change(state, group, slot, self.entity_description.field, hhmm)
+        if validate_schedule_conflicts(next_state):
+            if group == "mains_charge":
+                raise HomeAssistantError(
+                    f"Cannot change mains charge slot {slot} {self.entity_description.field} time because the resulting schedule would overlap an enabled discharge window."
+                )
+            raise HomeAssistantError(
+                f"Cannot change discharge slot {slot} {self.entity_description.field} time because the resulting schedule would overlap an enabled mains charge window."
+            )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

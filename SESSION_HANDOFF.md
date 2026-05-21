@@ -33,6 +33,8 @@ remote = origin
    AP-Wi-Fi-only + LAN-portal token onboarding design
 7. `docs/specs/2026-05-21-schedule-safety-guard-spec.md` for mandatory
    charge/discharge overlap protection across HA, server, and firmware
+8. `docs/status/2026-05-21-schedule-safety-implementation-status.md` for the
+   implementation result, validation, and rollout caveats
 
 ## Current Baseline
 
@@ -57,6 +59,20 @@ remote = origin
 - Schedule write safety is not finished until the invariant in
   `docs/specs/2026-05-21-schedule-safety-guard-spec.md` is implemented across
   all three layers
+- As of 2026-05-21 the code implementation is complete across HA, server, and
+  firmware:
+  - HA blocks overlapping enable commands both ways
+  - HA requires turning a slot OFF before editing its start/end time
+  - server rejects unsafe schedule commands against a fresh settings snapshot
+  - firmware re-validates immediately before BLE write and rejects stale or
+    replayed unsafe commands
+  - the overnight-overlap algorithm is canonicalized and test-covered
+- Rollout caveat:
+  - firmware was rebuilt and flashed to `/dev/ttyACM0`
+  - local `lumentree-local-server.service` could not be restarted from this
+    session because `systemctl restart` required interactive authentication
+  - read `docs/status/2026-05-21-schedule-safety-implementation-status.md`
+    before assuming the live service has already picked up the new server gate
 - Ownership reset caveat:
   - do not delete rows from `lumentree_devices` to unlink a device
   - deleting that row still cascades historical telemetry and energy data
