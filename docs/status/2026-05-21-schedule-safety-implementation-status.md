@@ -87,3 +87,26 @@ That means:
 
 Restart the local server service manually, then verify at runtime that a known
 overlapping schedule command is rejected before being queued or executed.
+
+## 2026-05-21 Follow-up: Write-Lane Latency Tuning
+
+After the initial safety rollout, write UX was tightened further without
+weakening the schedule-safety invariant.
+
+Changes:
+
+- firmware now polls pending commands before periodic telemetry upload in the
+  main loop
+- firmware forces an immediate settings snapshot upload after a successful write
+  command
+- firmware resets command polling immediately after write completion so the next
+  queued command does not wait for the normal full poll interval
+- Home Assistant temporarily switches to a faster poll interval while the last
+  command status is still `requested` or `sent`
+
+Goal:
+
+- keep guarded writes precise
+- make command status converge faster
+- make the UI reflect inverter state sooner
+- preserve all three schedule-safety gates unchanged

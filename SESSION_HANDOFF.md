@@ -67,6 +67,12 @@ remote = origin
   - firmware re-validates immediately before BLE write and rejects stale or
     replayed unsafe commands
   - the overnight-overlap algorithm is canonicalized and test-covered
+  - follow-up latency tuning also landed:
+    - firmware polls commands before the periodic read/upload loop
+    - firmware uploads settings immediately after successful writes
+    - firmware fetches the next queued command without waiting the full normal
+      poll interval
+    - HA temporarily fast-polls while command status is `requested` or `sent`
 - Rollout caveat:
   - firmware was rebuilt and flashed to `/dev/ttyACM0`
   - local `lumentree-local-server.service` could not be restarted from this

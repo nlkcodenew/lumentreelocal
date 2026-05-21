@@ -176,6 +176,7 @@ static bool postGatewayCandidates();
 static bool postGatewayStatus(const char* reason);
 static bool postReadPairingToken(const String& token, String& response);
 static bool postWritePairingCode(const String& code, String& response);
+static bool uploadSettingsSnapshotNow(const char* reason);
 static long readPairingTokenExpiresInSeconds();
 static long writePairingCodeExpiresInSeconds();
 static String defaultGatewayId();
@@ -194,6 +195,7 @@ static bool validateScheduleTimeChange(const char* group, int slot, bool isStart
 static void persistPendingCommandResult(uint64_t commandId, const char* status, JsonDocument& resultDoc, const char* error);
 static void clearPendingCommandResult();
 static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result);
+static void maybeAccelerateAfterWriteCommand(const char* status, JsonDocument& result);
 static void modbusNotifyCallback(BLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify);
 
 static void feedWatchdog() {
@@ -1033,6 +1035,35 @@ static bool postTelemetry(
   return status >= 200 && status < 300;
 }
 
+static bool uploadSettingsSnapshotNow(const char* reason) {
+  ModbusReadResult settings = runModbusRead(95, 95, "settings_registers_95_189");
+  if (!settings.ok) {
+    emitError("settings_read_empty", "no settings Modbus response payload to upload");
+    return false;
+  }
+
+  bool ok = postTelemetry(
+    settings.payloadHex,
+    settings.notifyCount,
+    settings.length,
+    95,
+    95,
+    "settings_registers_95_189",
+    "function_03_read_only_no_setting_write"
+  );
+  if (ok) {
+    lastSettingsUploadMs = millis();
+  }
+
+  JsonDocument log;
+  log["type"] = ok ? "settings_upload_forced_ok" : "settings_upload_forced_failed";
+  log["uptime_ms"] = millis() - bootMs;
+  log["reason"] = reason != nullptr ? reason : "";
+  log["safety"] = "post_write_settings_sync_only";
+  printJson(log);
+  return ok;
+}
+
 static bool postGatewayStatus(const char* reason) {
   if (apiUrl.length() == 0 || apiToken.length() == 0 || gatewayId.length() == 0) return false;
   if (!ensureWifiConnected()) return false;
@@ -1376,6 +1407,25 @@ static bool retryPendingCommandResult() {
   String errorCopy = pendingCommandResultError;
   const char* errorPtr = errorCopy.length() > 0 ? errorCopy.c_str() : nullptr;
   return postCommandResult(pendingCommandResultId, pendingCommandResultStatus.c_str(), resultDoc, errorPtr);
+}
+
+static void maybeAccelerateAfterWriteCommand(const char* status, JsonDocument& result) {
+  if (status == nullptr) {
+    return;
+  }
+  if (strcmp(status, "completed") == 0) {
+    uploadSettingsSnapshotNow("post_write_command_completed");
+  }
+  lastCommandPollMs = 0;
+  nextUploadMs = millis() + ((unsigned long)uploadIntervalSeconds * 1000UL);
+
+  JsonDocument log;
+  log["type"] = "write_lane_accelerated";
+  log["uptime_ms"] = millis() - bootMs;
+  log["command_status"] = status;
+  log["requested_value"] = result["requested_value"];
+  log["safety"] = "prioritize_write_lane_over_periodic_read_loop";
+  printJson(log);
 }
 
 static bool runModbusWriteSingleRegisterFunction16(uint16_t registerAddress, uint16_t value, const char* label) {
@@ -2135,7 +2185,9 @@ static void executeCommand(JsonObject command) {
   }
 
   auto postWriteResult = [&](bool ok, String& errorMessage) {
-    postCommandResult(commandId, commandResultStatusForOutcome(ok, result), result, ok ? nullptr : errorMessage.c_str());
+    const char* status = commandResultStatusForOutcome(ok, result);
+    postCommandResult(commandId, status, result, ok ? nullptr : errorMessage.c_str());
+    maybeAccelerateAfterWriteCommand(status, result);
   };
 
   if (strcmp(mode, "write") == 0 && strcmp(commandName, "set_first_discharge_target_soc") == 0) {
@@ -3489,6 +3541,7 @@ static void runWifiScan() {
 
 static void maybeRunProductionUpload() {
   if (!productionEnabled) return;
+  if (pendingCommandResultId != 0) return;
   unsigned long now = millis();
   if (nextUploadMs == 0) {
     nextUploadMs = now + 2000;
@@ -3723,8 +3776,8 @@ void loop() {
     handleCommand(line);
   }
   handleProvisioningPortal();
-  maybeRunProductionUpload();
   pollPendingCommand();
+  maybeRunProductionUpload();
   maybeEmitHeartbeat();
   feedWatchdog();
   delay(10);
