@@ -22,6 +22,34 @@ The integration provides:
 - diagnostics and bridge status
 - optional guarded direct inverter write entities when write access is explicitly granted
 
+## Current Write Safety Model
+
+Direct inverter write entities are guarded by two separate layers:
+
+1. access control
+2. schedule safety validation
+
+### Access Control
+
+- read access requires a valid `read pairing token` during first-time setup
+- write access requires an additional valid `write pairing token`
+- Home Assistant stores scoped grant tokens after onboarding
+- Home Assistant does not need the original server bearer token
+
+### Schedule Safety
+
+For charge/discharge schedule entities, the current integration behavior is:
+
+- enabling a mains charge slot is blocked if it would overlap an enabled discharge slot
+- enabling a discharge slot is blocked if it would overlap an enabled mains charge slot
+- changing a slot `start` or `end` time requires that slot to be turned `OFF` first
+- windows that only touch at the boundary are allowed
+  - example: `08:00-10:00` and `10:00-12:00`
+- overnight overlap is treated correctly
+  - example: `23:00-02:00` overlaps `01:00-03:00`
+
+This means the Home Assistant UI now prevents the most dangerous schedule mistakes before they are sent to the backend.
+
 ## Important Security Model
 
 This integration no longer uses `Device ID` alone for first-time access.
@@ -205,6 +233,12 @@ If you also provide a valid `write pairing token`, Home Assistant may expose ent
 
 Only enable write access if you understand the effect of those entities.
 
+For schedule-related write entities:
+
+- turn a slot `OFF` first
+- change its `start` and/or `end` time
+- then turn it `ON` again after the new window is safe
+
 ## What You Will See In Home Assistant
 
 Typical entities include:
@@ -258,6 +292,23 @@ Also note:
 
 - tokens are not case-sensitive
 - spaces before or after the token should be avoided
+
+### I Cannot Change A Schedule Time While The Slot Is ON
+
+This is expected and intentional.
+
+For safety, schedule time edits require the target slot to be `OFF` first.
+
+Correct flow:
+
+1. turn the schedule slot `OFF`
+2. change the `start` or `end` time
+3. turn the slot `ON` again if you still want it enabled
+
+This applies to both:
+
+- mains charge slots
+- discharge slots
 
 ### Write Pairing Token Is Rejected
 
