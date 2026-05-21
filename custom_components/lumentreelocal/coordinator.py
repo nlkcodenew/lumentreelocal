@@ -14,7 +14,7 @@ from .api import (
     LumentreeLocalApiError,
     LumentreeLocalNotFoundError,
 )
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LOGGER
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, FAST_COMMAND_SCAN_INTERVAL, LOGGER
 
 
 class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -57,10 +57,20 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 latest["settings"] = await self.client.settings(self.device_id)
             except LumentreeLocalNotFoundError:
                 latest["settings"] = {}
+            self._adjust_update_interval(latest.get("command_status"))
             self._maybe_notify_pairing_status(latest["health"])
             return latest
         except LumentreeLocalApiError as err:
             raise UpdateFailed(str(err)) from err
+
+    def _adjust_update_interval(self, command_status: dict[str, Any] | None) -> None:
+        """Speed up polling while a write command is still pending."""
+        next_interval = DEFAULT_SCAN_INTERVAL
+        if isinstance(command_status, dict):
+            command = command_status.get("last_command")
+            if isinstance(command, dict) and command.get("status") in {"requested", "sent"}:
+                next_interval = FAST_COMMAND_SCAN_INTERVAL
+        self.update_interval = next_interval
 
     def _maybe_notify_pairing_status(self, health: dict[str, Any]) -> None:
         """Create one-shot user notifications for actionable pairing states."""

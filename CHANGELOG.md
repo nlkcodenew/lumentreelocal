@@ -12,6 +12,16 @@ This project follows a simple release flow for HACS:
 
 - No unreleased changes.
 
+## [0.14.16] - 2026-05-21
+
+### Changed
+
+- Switched Home Assistant into a temporary fast-poll mode while write commands are still `requested` or `sent`, so command status and settings feedback return much faster after guarded writes.
+
+### Fixed
+
+- Prioritized the firmware write lane over the normal periodic read loop by polling commands before telemetry uploads, forcing an immediate settings sync after successful writes, and fetching the next queued command without waiting for the full poll interval.
+
 ## [0.14.15] - 2026-05-21
 
 ### Fixed
