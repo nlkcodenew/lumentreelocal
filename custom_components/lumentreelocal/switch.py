@@ -18,6 +18,12 @@ from .api import LumentreeLocalApiError, LumentreeLocalAuthError
 from .const import DOMAIN, SWITCH_WRITE_CONFIRM_TIMEOUT_SECONDS
 from .coordinator import LumentreeLocalCoordinator
 from .entity_helpers import lumentree_device_info, settings_available, settings_value
+from .schedule_safety import (
+    apply_schedule_change,
+    describe_conflict,
+    schedule_state_from_settings,
+    validate_schedule_conflicts,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -52,31 +58,6 @@ SWITCH_DESCRIPTIONS: tuple[LumentreeLocalSwitchDescription, ...] = (
         for slot in range(1, 5)
     )
 )
-
-
-def _hhmm_to_minutes(value: int) -> int:
-    return (value // 100 * 60) + (value % 100)
-
-
-def _expand_window(start: int, end: int) -> list[tuple[int, int]]:
-    start_minutes = _hhmm_to_minutes(start)
-    end_minutes = _hhmm_to_minutes(end)
-    if end_minutes <= start_minutes:
-        return [(start_minutes, 24 * 60), (0, end_minutes)]
-    return [(start_minutes, end_minutes)]
-
-
-def _windows_overlap(left_start: int, left_end: int, right_start: int, right_end: int) -> bool:
-    for left_begin, left_finish in _expand_window(left_start, left_end):
-        for right_begin, right_finish in _expand_window(right_start, right_end):
-            if left_begin < right_finish and right_begin < left_finish:
-                return True
-    return False
-
-
-def _format_hhmm(value: int) -> str:
-    return f"{value // 100:02d}:{value % 100:02d}"
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -152,8 +133,8 @@ class LumentreeLocalSwitch(CoordinatorEntity[LumentreeLocalCoordinator], SwitchE
     async def _set_enabled(self, enabled: bool) -> None:
         if self._pending_active():
             raise HomeAssistantError("A previous switch change is still waiting for inverter confirmation.")
-        if enabled and self.entity_description.command_group == "mains_charge":
-            self._raise_if_mains_charge_overlaps_discharge()
+        if enabled:
+            self._raise_if_enable_would_overlap()
         try:
             if self.entity_description.command_group == "mains_charge":
                 await self.coordinator.client.create_mains_charge_time_enable_command(
@@ -185,31 +166,27 @@ class LumentreeLocalSwitch(CoordinatorEntity[LumentreeLocalCoordinator], SwitchE
         self._sync_pending_with_snapshot()
         super()._handle_coordinator_update()
 
-    def _raise_if_mains_charge_overlaps_discharge(self) -> None:
-        charge_start = settings_value(self.coordinator, f"mains_charge_slot_{self.entity_description.slot}_start_time")
-        charge_end = settings_value(self.coordinator, f"mains_charge_slot_{self.entity_description.slot}_end_time")
-        if not isinstance(charge_start, int) or not isinstance(charge_end, int):
-            raise HomeAssistantError("Cannot enable mains charge before its time window is loaded from settings.")
-
-        overlapping_slots: list[str] = []
-        for slot in range(1, 5):
-            enabled = settings_value(self.coordinator, f"discharge_slot_{slot}_enabled")
-            if enabled is not True:
-                continue
-            discharge_start = settings_value(self.coordinator, f"discharge_slot_{slot}_start_time")
-            discharge_end = settings_value(self.coordinator, f"discharge_slot_{slot}_end_time")
-            if not isinstance(discharge_start, int) or not isinstance(discharge_end, int):
-                raise HomeAssistantError("Cannot enable mains charge before discharge schedules are loaded from settings.")
-            if _windows_overlap(charge_start, charge_end, discharge_start, discharge_end):
-                overlapping_slots.append(
-                    f"discharge slot {slot} ({_format_hhmm(discharge_start)}-{_format_hhmm(discharge_end)})"
-                )
-
-        if overlapping_slots:
+    def _raise_if_enable_would_overlap(self) -> None:
+        snapshot = self.coordinator.data.get("settings", {})
+        settings = snapshot.get("settings", {}) if isinstance(snapshot, dict) else {}
+        if not isinstance(settings, dict) or not settings:
+            raise HomeAssistantError("Cannot validate schedule safety before the inverter settings snapshot is loaded.")
+        state = schedule_state_from_settings(settings)
+        next_state = apply_schedule_change(state, self.entity_description.command_group, self.entity_description.slot, "enabled", True)
+        conflicts = validate_schedule_conflicts(next_state)
+        if not conflicts:
+            return
+        if self.entity_description.command_group == "mains_charge":
+            overlap_text = ", ".join(describe_conflict(conflict, "mains_charge") for conflict in conflicts)
             raise HomeAssistantError(
                 "Cannot enable mains charge because it overlaps enabled "
-                f"{', '.join(overlapping_slots)}. Disable or adjust the overlapping discharge schedule first."
+                f"{overlap_text}. Disable or adjust the overlapping discharge schedule first."
             )
+        overlap_text = ", ".join(describe_conflict(conflict, "discharge") for conflict in conflicts)
+        raise HomeAssistantError(
+            "Cannot enable discharge because it overlaps enabled "
+            f"{overlap_text}. Disable or adjust the overlapping mains charge schedule first."
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

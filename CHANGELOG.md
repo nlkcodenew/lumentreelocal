@@ -12,6 +12,20 @@ This project follows a simple release flow for HACS:
 
 - No unreleased changes.
 
+## [0.14.14] - 2026-05-21
+
+### Added
+
+- Added schedule-safety guardrails so Home Assistant blocks enabling overlapping mains-charge and discharge windows in both directions.
+
+### Changed
+
+- Schedule start/end time edits now require the target slot to be turned OFF before the time window can be changed.
+
+### Fixed
+
+- Canonicalized overnight overlap detection so touching boundaries remain allowed while true cross-midnight overlap is rejected consistently.
+
 ## [0.14.12] - 2026-05-20
 
 ### Added
