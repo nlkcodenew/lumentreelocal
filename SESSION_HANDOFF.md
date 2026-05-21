@@ -26,10 +26,13 @@ remote = origin
 1. `START_HERE.md`
 2. `docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
 3. `docs/status/2026-05-20-read-write-token-claim-implementation-status.md`
-4. `docs/specs/2026-05-20-multi-user-read-claim-spec.md` if the next session
+4. `docs/status/2026-05-20-auth-refactor-wrapup-and-future-work.md`
+5. `docs/specs/2026-05-20-multi-user-read-claim-spec.md` if the next session
    discusses shared-server or multi-user access control
-5. `docs/specs/2026-05-20-read-write-token-claim-flow-spec.md` for the chosen
+6. `docs/specs/2026-05-20-read-write-token-claim-flow-spec.md` for the chosen
    AP-Wi-Fi-only + LAN-portal token onboarding design
+7. `docs/specs/2026-05-21-schedule-safety-guard-spec.md` for mandatory
+   charge/discharge overlap protection across HA, server, and firmware
 
 ## Current Baseline
 
@@ -49,6 +52,11 @@ remote = origin
   - HASS claims `read_grant`/`write_grant` with `Device ID`
 - Multi-user hardening beyond this remains deferred and recorded in
   `docs/specs/2026-05-20-multi-user-read-claim-spec.md`
+- Detailed wrap-up of what changed and what should happen next is recorded in
+  `docs/status/2026-05-20-auth-refactor-wrapup-and-future-work.md`
+- Schedule write safety is not finished until the invariant in
+  `docs/specs/2026-05-21-schedule-safety-guard-spec.md` is implemented across
+  all three layers
 - Ownership reset caveat:
   - do not delete rows from `lumentree_devices` to unlink a device
   - deleting that row still cascades historical telemetry and energy data
