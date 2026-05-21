@@ -97,6 +97,94 @@ Minimum rule before flashing a new firmware build:
 - Flash site local bind: `127.0.0.1:8790`
 - Home Assistant domain: `lumentreelocal`
 
+## Current Feature Inventory
+
+This section is the quickest summary of what the `esp32-lumentree` system
+currently does across firmware, server, flash-site, and Home Assistant.
+
+### 1. ESP32 onboarding
+
+- first boot enters AP mode
+- AP portal asks only for Wi-Fi credentials
+- after Wi-Fi join, AP mode turns off
+- the ESP32 local portal continues on LAN
+- preferred local URL is mDNS-based:
+  - `http://lumentree-xxxx.local`
+- IP access still works as fallback
+
+### 2. BLE bridge behavior
+
+- ESP32 scans BLE for nearby Lumentree candidates
+- user can inspect/select the intended inverter from the local portal
+- internal binding is based on `Device ID` plus inverter `MAC`
+- gateway pairing state and candidates are uploaded to the local server
+
+### 3. Auth and onboarding model
+
+- Home Assistant no longer uses `Device ID` alone for first-time read access
+- first-time onboarding requires:
+  - `Device ID`
+  - `read pairing token` from the ESP32 local portal
+  - optional `write pairing token`
+- token entry is case-insensitive
+- Home Assistant stores scoped grant tokens after claim:
+  - `read_grant_token`
+  - optional `write_grant_token`
+
+### 4. Read path
+
+- normal device read endpoints are protected
+- `Device ID` alone is no longer enough to read inverter data
+- Home Assistant reads through scoped read/write grants after onboarding
+
+### 5. Write path
+
+- direct inverter writes stay behind explicit write authorization
+- write entities in Home Assistant use guarded semantic commands only
+- generic arbitrary register writing is not part of the normal runtime path
+
+### 6. Schedule safety model
+
+Charge/discharge scheduling now has layered protection in all three runtime
+layers:
+
+- Home Assistant integration
+- local server
+- ESP32 firmware
+
+Current invariant:
+
+- the battery must never end up in a schedule state where enabled charge and
+  enabled discharge windows overlap
+
+Current behavior:
+
+- enabling mains charge checks all enabled discharge windows
+- enabling discharge checks all enabled mains charge windows
+- editing `start` or `end` time requires the target slot to be `OFF` first
+- touching boundaries are allowed
+  - example: `08:00-10:00` and `10:00-12:00`
+- overnight overlap is rejected correctly
+  - example: `23:00-02:00` and `01:00-03:00`
+- firmware re-checks immediately before BLE write, so stale or replayed queued
+  commands are still blocked at the last safety boundary
+
+### 7. Energy and telemetry
+
+- realtime telemetry upload is active
+- energy counters are available
+- server stores telemetry and energy history in Postgres
+- Home Assistant exposes realtime sensors, energy sensors, diagnostics, and
+  guarded write entities when authorized
+
+### 8. Current important caveats
+
+- the local server service must be restarted after server code changes to make
+  runtime gates live
+- firmware TLS hardening is still an important future task
+- full multi-user server hardening remains deferred beyond the current scoped
+  grant model
+
 ## Session Rule
 
 Before editing anything, confirm whether the task belongs to:
