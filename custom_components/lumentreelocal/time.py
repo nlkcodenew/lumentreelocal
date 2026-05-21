@@ -100,6 +100,7 @@ class LumentreeLocalTime(CoordinatorEntity[LumentreeLocalCoordinator], TimeEntit
         self._device_id = coordinator.device_id
         self._attr_unique_id = f"{DOMAIN}_{self._device_id}_{description.key}"
         self._attr_device_info = lumentree_device_info(coordinator)
+        self._frontend_resync_nonce = 0
 
     @property
     def native_value(self) -> time | None:
@@ -115,8 +116,8 @@ class LumentreeLocalTime(CoordinatorEntity[LumentreeLocalCoordinator], TimeEntit
     async def async_set_value(self, value: time) -> None:
         """Queue the corresponding time write command."""
         hhmm = time_to_hhmm(value)
-        self._raise_if_time_edit_is_unsafe(hhmm)
         try:
+            self._raise_if_time_edit_is_unsafe(hhmm)
             if self.entity_description.command_group == "mains_charge":
                 await self.coordinator.client.create_mains_charge_time_command(
                     self._device_id,
@@ -132,14 +133,24 @@ class LumentreeLocalTime(CoordinatorEntity[LumentreeLocalCoordinator], TimeEntit
                     hhmm,
                 )
         except LumentreeLocalAuthError as err:
+            await self._reassert_snapshot_state()
             raise HomeAssistantError(
                 "Write access is required for Lumentree Local write commands. "
                 "Generate a write pairing code from the ESP32 portal and enter it "
                 "in Lumentree Local options."
             ) from err
         except LumentreeLocalApiError as err:
+            await self._reassert_snapshot_state()
             raise HomeAssistantError(str(err)) from err
+        except HomeAssistantError:
+            await self._reassert_snapshot_state()
+            raise
 
+        await self.coordinator.async_request_refresh()
+
+    async def _reassert_snapshot_state(self) -> None:
+        self._frontend_resync_nonce += 1
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
     def _raise_if_time_edit_is_unsafe(self, hhmm: int) -> None:
@@ -175,4 +186,5 @@ class LumentreeLocalTime(CoordinatorEntity[LumentreeLocalCoordinator], TimeEntit
             "loaded_from_settings_snapshot": self.native_value is not None,
             "write_access_required": True,
             "write_warning": "Changing this entity writes directly to the inverter schedule.",
+            "frontend_resync_nonce": self._frontend_resync_nonce,
         }

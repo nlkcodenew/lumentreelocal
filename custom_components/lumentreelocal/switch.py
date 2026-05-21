@@ -87,6 +87,7 @@ class LumentreeLocalSwitch(CoordinatorEntity[LumentreeLocalCoordinator], SwitchE
         self._attr_device_info = lumentree_device_info(coordinator)
         self._pending_enabled: bool | None = None
         self._pending_started_monotonic: float | None = None
+        self._frontend_resync_nonce = 0
 
     def _snapshot_value(self) -> bool | None:
         value = settings_value(self.coordinator, self.entity_description.key)
@@ -133,9 +134,9 @@ class LumentreeLocalSwitch(CoordinatorEntity[LumentreeLocalCoordinator], SwitchE
     async def _set_enabled(self, enabled: bool) -> None:
         if self._pending_active():
             raise HomeAssistantError("A previous switch change is still waiting for inverter confirmation.")
-        if enabled:
-            self._raise_if_enable_would_overlap()
         try:
+            if enabled:
+                self._raise_if_enable_would_overlap()
             if self.entity_description.command_group == "mains_charge":
                 await self.coordinator.client.create_mains_charge_time_enable_command(
                     self._device_id,
@@ -149,16 +150,28 @@ class LumentreeLocalSwitch(CoordinatorEntity[LumentreeLocalCoordinator], SwitchE
                     enabled,
                 )
         except LumentreeLocalAuthError as err:
+            await self._reassert_snapshot_state()
             raise HomeAssistantError(
                 "Write access is required for Lumentree Local write commands. "
                 "Generate a write pairing code from the ESP32 portal and enter it "
                 "in Lumentree Local options."
             ) from err
         except LumentreeLocalApiError as err:
+            await self._reassert_snapshot_state()
             raise HomeAssistantError(str(err)) from err
+        except HomeAssistantError:
+            await self._reassert_snapshot_state()
+            raise
 
         self._pending_enabled = enabled
         self._pending_started_monotonic = monotonic()
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    async def _reassert_snapshot_state(self) -> None:
+        self._pending_enabled = None
+        self._pending_started_monotonic = None
+        self._frontend_resync_nonce += 1
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
@@ -199,4 +212,5 @@ class LumentreeLocalSwitch(CoordinatorEntity[LumentreeLocalCoordinator], SwitchE
             "write_access_required": True,
             "write_warning": "Changing this entity writes directly to the inverter schedule.",
             "pending_confirmation": self._pending_active(),
+            "frontend_resync_nonce": self._frontend_resync_nonce,
         }

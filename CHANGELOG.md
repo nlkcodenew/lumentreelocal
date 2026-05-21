@@ -12,6 +12,12 @@ This project follows a simple release flow for HACS:
 
 - No unreleased changes.
 
+## [0.14.15] - 2026-05-21
+
+### Fixed
+
+- Reasserted the real snapshot state after local schedule validation rejects a switch or time change so Home Assistant no longer leaves those controls stuck in an optimistic UI state.
+
 ## [0.14.14] - 2026-05-21
 
 ### Added
