@@ -28,6 +28,10 @@ from .const import DOMAIN
 from .coordinator import LumentreeLocalCoordinator
 
 
+BILLING_CYCLE_RESET_DAY = 22
+EQUIVALENT_BILL_RATE_VND_PER_KWH = 2864
+
+
 @dataclass(frozen=True, kw_only=True)
 class LumentreeLocalSensorDescription(SensorEntityDescription):
     """Description of a Lumentree Local sensor."""
@@ -35,6 +39,7 @@ class LumentreeLocalSensorDescription(SensorEntityDescription):
     metric_key: str
     source: str = "metrics"
     period: str | None = None
+    value_fn: Any = None
 
 
 def energy_sensor(period: str, metric_key: str, name_key: str) -> LumentreeLocalSensorDescription:
@@ -63,6 +68,50 @@ def metric_energy_sensor(metric_key: str) -> LumentreeLocalSensorDescription:
         state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=1,
     )
+
+
+def billing_cycle_energy_sensor(metric_key: str, name_key: str) -> LumentreeLocalSensorDescription:
+    """Create a billing-cycle energy sensor description."""
+    return LumentreeLocalSensorDescription(
+        key=f"billing_cycle_{name_key}",
+        metric_key=metric_key,
+        source="energy",
+        period="billing_cycle",
+        translation_key=f"billing_cycle_{name_key}",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=3,
+    )
+
+
+def billing_cycle_bill_sensor() -> LumentreeLocalSensorDescription:
+    """Estimated bill for the current EVN billing cycle."""
+    return LumentreeLocalSensorDescription(
+        key="billing_cycle_equivalent_bill_vnd",
+        metric_key="billing_cycle_equivalent_bill_vnd",
+        source="derived",
+        translation_key="billing_cycle_equivalent_bill_vnd",
+        native_unit_of_measurement="VND",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=0,
+    )
+
+
+def compute_billing_cycle_equivalent_bill(data: dict[str, Any]) -> float | None:
+    """Estimate the current billing-cycle bill from load energy."""
+    energy = data.get("energy", {})
+    if not isinstance(energy, dict):
+        return None
+    billing_cycle = energy.get("billing_cycle", {})
+    if not isinstance(billing_cycle, dict):
+        return None
+    load_kwh = billing_cycle.get("load_kwh")
+    try:
+        return round(float(load_kwh) * EQUIVALENT_BILL_RATE_VND_PER_KWH, 0)
+    except (TypeError, ValueError):
+        return None
 
 
 def health_sensor(
@@ -339,6 +388,7 @@ SENSORS: tuple[LumentreeLocalSensorDescription, ...] = (
     energy_sensor("daily", "battery_discharge_kwh", "battery_discharge_kwh"),
     energy_sensor("daily", "ac_input_kwh", "ac_input_kwh"),
     energy_sensor("daily", "ac_output_kwh", "ac_output_kwh"),
+    billing_cycle_energy_sensor("load_kwh", "load_kwh"),
     energy_sensor("monthly", "pv_kwh", "pv_kwh"),
     energy_sensor("monthly", "load_kwh", "load_kwh"),
     energy_sensor("monthly", "grid_in_kwh", "grid_in_kwh"),
@@ -363,6 +413,7 @@ SENSORS: tuple[LumentreeLocalSensorDescription, ...] = (
     energy_sensor("total", "battery_discharge_kwh", "battery_discharge_kwh"),
     energy_sensor("total", "ac_input_kwh", "ac_input_kwh"),
     energy_sensor("total", "ac_output_kwh", "ac_output_kwh"),
+    billing_cycle_bill_sensor(),
     health_sensor(
         "latest_age_seconds",
         unit=UnitOfTime.SECONDS,
@@ -511,6 +562,13 @@ class LumentreeLocalSensor(CoordinatorEntity[LumentreeLocalCoordinator], SensorE
                 return command.get("error")
             return None
 
+        if self.entity_description.source == "derived":
+            if callable(self.entity_description.value_fn):
+                return self.entity_description.value_fn(self.coordinator.data)
+            if self.entity_description.metric_key == "billing_cycle_equivalent_bill_vnd":
+                return compute_billing_cycle_equivalent_bill(self.coordinator.data)
+            return None
+
         metrics = self.coordinator.data.get("metrics", {})
         if not isinstance(metrics, dict):
             return None
@@ -539,6 +597,14 @@ class LumentreeLocalSensor(CoordinatorEntity[LumentreeLocalCoordinator], SensorE
                         "last_observed_at": period_data.get("last_observed_at"),
                     }
                 )
+                if self.entity_description.period == "billing_cycle":
+                    attrs.update(
+                        {
+                            "billing_cycle_reset_day": energy.get("billing_cycle_reset_day"),
+                            "billing_cycle_start": energy.get("billing_cycle_start"),
+                            "billing_cycle_end": energy.get("billing_cycle_end"),
+                        }
+                    )
         if self.entity_description.source == "health":
             health = data.get("health", {})
             if isinstance(health, dict):
@@ -606,6 +672,19 @@ class LumentreeLocalSensor(CoordinatorEntity[LumentreeLocalCoordinator], SensorE
                         "write_ack": command.get("write_ack"),
                         "verified": command.get("verified"),
                         "safety": command.get("safety"),
+                    }
+                )
+        if self.entity_description.source == "derived":
+            if self.entity_description.metric_key == "billing_cycle_equivalent_bill_vnd":
+                energy = data.get("energy", {})
+                billing_cycle = energy.get("billing_cycle", {}) if isinstance(energy, dict) else {}
+                attrs.update(
+                    {
+                        "rate_vnd_per_kwh": EQUIVALENT_BILL_RATE_VND_PER_KWH,
+                        "billing_cycle_reset_day": energy.get("billing_cycle_reset_day") if isinstance(energy, dict) else BILLING_CYCLE_RESET_DAY,
+                        "billing_cycle_start": energy.get("billing_cycle_start") if isinstance(energy, dict) else None,
+                        "billing_cycle_end": energy.get("billing_cycle_end") if isinstance(energy, dict) else None,
+                        "billing_cycle_load_kwh": billing_cycle.get("load_kwh") if isinstance(billing_cycle, dict) else None,
                     }
                 )
         return attrs

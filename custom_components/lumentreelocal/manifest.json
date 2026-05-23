@@ -9,5 +9,5 @@
   "integration_type": "device",
   "loggers": ["custom_components.lumentreelocal"],
   "requirements": [],
-  "version": "0.14.16"
+  "version": "0.14.17"
 }

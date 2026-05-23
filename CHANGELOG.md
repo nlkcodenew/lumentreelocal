@@ -12,6 +12,16 @@ This project follows a simple release flow for HACS:
 
 - No unreleased changes.
 
+## [0.14.17] - 2026-05-23
+
+### Added
+
+- Added billing-cycle load energy and equivalent bill sensors for the EVN-style cycle that runs from the 22nd of the month to the 21st of the next month.
+
+### Changed
+
+- The Solar battery summary card now follows the inverter-native battery power and battery status signals instead of the legacy adjusted helper when the dashboard is refreshed against the updated integration.
+
 ## [0.14.16] - 2026-05-21
 
 ### Changed
