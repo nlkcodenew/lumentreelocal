@@ -8,6 +8,182 @@
       "sections": [
         {
           "type": "grid",
+          "column_span": 4,
+          "cards": [
+            {
+              "type": "custom:button-card",
+              "show_icon": false,
+              "show_name": false,
+              "show_state": false,
+              "tap_action": {
+                "action": "none"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "padding": "18px 20px"
+                  },
+                  {
+                    "border-radius": "22px"
+                  },
+                  {
+                    "background": "linear-gradient(160deg, var(--ha-card-background, var(--card-background-color)) 0%, rgba(var(--rgb-primary-color), 0.06) 100%)"
+                  },
+                  {
+                    "border": "1px solid rgba(var(--rgb-primary-color), 0.12)"
+                  },
+                  {
+                    "box-shadow": "0 16px 34px rgba(15, 23, 42, 0.10)"
+                  }
+                ],
+                "grid": [
+                  {
+                    "grid-template-areas": "\"title\" \"subtitle\""
+                  },
+                  {
+                    "grid-template-columns": "1fr"
+                  },
+                  {
+                    "row-gap": "6px"
+                  }
+                ],
+                "custom_fields": {
+                  "title": [
+                    {
+                      "justify-self": "start"
+                    }
+                  ],
+                  "subtitle": [
+                    {
+                      "justify-self": "start"
+                    }
+                  ]
+                }
+              },
+              "custom_fields": {
+                "title": "[[[ return '<div style=\"font-size:1.25rem;font-weight:800;letter-spacing:0.02em;color:var(--primary-text-color);\">Solar Dashboard</div>'; ]]]",
+                "subtitle": "[[[ return '<div style=\"font-size:0.95rem;line-height:1.45;color:var(--secondary-text-color);\">Live flow overview, forecast and battery controls. Use the buttons on the right to switch the Solar tab between Light and Dark instantly.</div>'; ]]]"
+              }
+            },
+            {
+              "type": "custom:button-card",
+              "name": "Light",
+              "icon": "mdi:white-balance-sunny",
+              "tap_action": {
+                "action": "call-service",
+                "service": "frontend.set_theme",
+                "service_data": {
+                  "name": "default",
+                  "mode": "light"
+                }
+              },
+              "styles": {
+                "card": [
+                  {
+                    "height": "100%"
+                  },
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "border-radius": "22px"
+                  },
+                  {
+                    "background": "linear-gradient(160deg, var(--ha-card-background, var(--card-background-color)) 0%, rgba(var(--rgb-primary-color), 0.04) 100%)"
+                  },
+                  {
+                    "border": "1px solid rgba(var(--rgb-primary-color), 0.12)"
+                  },
+                  {
+                    "box-shadow": "0 12px 28px rgba(15, 23, 42, 0.10)"
+                  }
+                ],
+                "icon": [
+                  {
+                    "color": "var(--primary-color)"
+                  },
+                  {
+                    "width": "32px"
+                  },
+                  {
+                    "height": "32px"
+                  }
+                ],
+                "name": [
+                  {
+                    "font-size": "1rem"
+                  },
+                  {
+                    "font-weight": "700"
+                  },
+                  {
+                    "color": "var(--primary-text-color)"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "custom:button-card",
+              "name": "Dark",
+              "icon": "mdi:weather-night",
+              "tap_action": {
+                "action": "call-service",
+                "service": "frontend.set_theme",
+                "service_data": {
+                  "name": "default",
+                  "mode": "dark"
+                }
+              },
+              "styles": {
+                "card": [
+                  {
+                    "height": "100%"
+                  },
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "border-radius": "22px"
+                  },
+                  {
+                    "background": "linear-gradient(160deg, var(--ha-card-background, var(--card-background-color)) 0%, rgba(var(--rgb-primary-color), 0.04) 100%)"
+                  },
+                  {
+                    "border": "1px solid rgba(var(--rgb-primary-color), 0.12)"
+                  },
+                  {
+                    "box-shadow": "0 12px 28px rgba(15, 23, 42, 0.10)"
+                  }
+                ],
+                "icon": [
+                  {
+                    "color": "var(--primary-color)"
+                  },
+                  {
+                    "width": "32px"
+                  },
+                  {
+                    "height": "32px"
+                  }
+                ],
+                "name": [
+                  {
+                    "font-size": "1rem"
+                  },
+                  {
+                    "font-weight": "700"
+                  },
+                  {
+                    "color": "var(--primary-text-color)"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
           "cards": [
             {
               "type": "custom:nlk-3d-energy-card",
@@ -58,22 +234,19 @@
               "styles": {
                 "card": [
                   {
-                    "padding": "16px"
+                    "padding": "20px"
                   },
                   {
-                    "border-radius": "20px"
+                    "border-radius": "24px"
                   },
                   {
-                    "background": "linear-gradient(145deg,"
+                    "background": "linear-gradient(180deg, var(--ha-card-background, var(--card-background-color)) 0%, rgba(var(--rgb-primary-color), 0.04) 100%)"
                   },
                   {
-                    "border": "1px solid rgba(255, 215, 0, 0.15)"
+                    "border": "1px solid rgba(var(--rgb-primary-color), 0.10)"
                   },
                   {
-                    "box-shadow": "0 0 15px rgba(255, 140, 0, 0.1)"
-                  },
-                  {
-                    "overflow": "visible"
+                    "box-shadow": "0 18px 36px rgba(15, 23, 42, 0.10)"
                   }
                 ],
                 "grid": [
@@ -84,18 +257,15 @@
                     "grid-template-columns": "1fr"
                   },
                   {
-                    "grid-template-rows": "min-content min-content min-content min-content"
-                  },
-                  {
-                    "row-gap": "0px"
+                    "row-gap": "12px"
                   }
                 ]
               },
               "custom_fields": {
-                "header": "[[[\n  return `<div style=\"\n    display: flex; align-items: center; justify-content: center;\n    margin-bottom: 20px;\n  \">\n    <span style=\"\n      font-size: 1.2rem; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;\n      background: -webkit-linear-gradient(45deg, #FFD700, #FF8C00);\n      -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n    \">Năng lượng mặt trời</span>\n  </div>`;\n]]]\n",
-                "row_forecast_today": "[[[\n  const state = states['sensor.solcast_pv_forecast_forecast_today'].state;\n  const unit = states['sensor.solcast_pv_forecast_forecast_today'].attributes.unit_of_measurement || 'kWh';\n  return `\n  <div style=\"\n    display: flex; align-items: center; justify-content: space-between;\n    background: rgba(255, 215, 0, 0.05); border: 1px solid rgba(255, 215, 0, 0.2);\n    border-radius: 12px; padding: 12px; margin-bottom: 12px;\n  \">\n    <div style=\"display: flex; align-items: center; gap: 12px;\">\n      <ha-icon icon=\"mdi:weather-sunny\" style=\"color: #FFD700; width: 24px; height: 24px; filter: drop-shadow(0 0 5px rgba(255,215,0,0.6));\"></ha-icon>\n      <span style=\"color: #ddd; font-weight: 500; font-size: 0.95rem;\">Dự báo hôm nay</span>\n    </div>\n    <span style=\"\n      font-weight: bold; font-size: 1.1rem;\n      background: -webkit-linear-gradient(0deg, #FFD700, #FFA500);\n      -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n    \">${state} <span style=\"font-size: 0.8rem; opacity: 0.7; color: #FFD700; -webkit-text-fill-color: #FFD700;\">${unit}</span></span>\n  </div>`;\n]]]\n",
-                "row_production": "[[[\n  const state = states['sensor.lumentree_local_p240819130_daily_pv_energy'].state;\n  const unit = states['sensor.lumentree_local_p240819130_daily_pv_energy'].attributes.unit_of_measurement || 'kWh';\n  return `\n  <style>\n    @keyframes pulse-sun {\n      0% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255, 69, 0, 0.5)); }\n      50% { transform: scale(1.2); filter: drop-shadow(0 0 10px rgba(255, 69, 0, 1)); }\n      100% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255, 69, 0, 0.5)); }\n    }\n  </style>\n  <div style=\"\n    display: flex; align-items: center; justify-content: space-between;\n    background: rgba(255, 69, 0, 0.1); border: 1px solid rgba(255, 69, 0, 0.4);\n    box-shadow: 0 0 10px rgba(255, 69, 0, 0.15); border-radius: 12px;\n    padding: 14px; margin-bottom: 12px;\n  \">\n    <div style=\"display: flex; align-items: center; gap: 12px;\">\n      <div style=\"animation: pulse-sun 3s infinite ease-in-out;\">\n        <ha-icon icon=\"mdi:solar-power-variant\" style=\"color: #ff4500; width: 28px; height: 28px;\"></ha-icon>\n      </div>\n      <span style=\"color: white; font-weight: 700; font-size: 1rem; text-transform: uppercase;\">Sản lượng thực tế</span>\n    </div>\n    <span style=\"\n      font-weight: 900; font-size: 1.3rem;\n      background: -webkit-linear-gradient(0deg, #ff4500, #ffae00);\n      -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n      text-shadow: 0 0 15px rgba(255, 69, 0, 0.3);\n    \">${state} <span style=\"font-size: 0.8rem; opacity: 0.7; color: #ff4500; -webkit-text-fill-color: #ff4500;\">${unit}</span></span>\n  </div>`;\n]]]\n",
-                "row_forecast_tomorrow": "[[[\n  const state = states['sensor.solcast_pv_forecast_forecast_tomorrow'].state;\n  const unit = states['sensor.solcast_pv_forecast_forecast_tomorrow'].attributes.unit_of_measurement || 'kWh';\n  return `\n  <div style=\"\n    display: flex; align-items: center; justify-content: space-between;\n    background: rgba(0, 191, 255, 0.05); border: 1px solid rgba(0, 191, 255, 0.2);\n    border-radius: 12px; padding: 12px;\n  \">\n    <div style=\"display: flex; align-items: center; gap: 12px;\">\n      <ha-icon icon=\"mdi:weather-partly-cloudy\" style=\"color: #00bfff; width: 24px; height: 24px; filter: drop-shadow(0 0 5px rgba(0,191,255,0.6));\"></ha-icon>\n      <span style=\"color: #ddd; font-weight: 500; font-size: 0.95rem;\">Dự báo ngày mai</span>\n    </div>\n    <span style=\"\n      font-weight: bold; font-size: 1.1rem;\n      background: -webkit-linear-gradient(0deg, #00bfff, #1e90ff);\n      -webkit-background-clip: text; -webkit-text-fill-color: transparent;\n    \">${state} <span style=\"font-size: 0.8rem; opacity: 0.7; color: #00bfff; -webkit-text-fill-color: #00bfff;\">${unit}</span></span>\n  </div>`;\n]]]\n"
+                "header": "[[[ return `\n      <div style=\"display:flex;align-items:flex-end;justify-content:space-between;gap:12px;\">\n        <div>\n          <div style=\"font-size:0.82rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--secondary-text-color);\">Forecast</div>\n          <div style=\"font-size:1.35rem;font-weight:800;color:var(--primary-text-color);margin-top:4px;\">Solar production</div>\n        </div>\n        <div style=\"padding:6px 10px;border-radius:999px;background:rgba(var(--rgb-primary-color),0.10);color:var(--primary-color);font-size:0.78rem;font-weight:700;\">Solcast + Live</div>\n      </div>`; ]]]",
+                "row_forecast_today": "[[[ const s = states['sensor.solcast_pv_forecast_forecast_today']; const state = s ? s.state : '—'; const unit = s?.attributes?.unit_of_measurement || 'kWh'; return `\n      <div style=\"display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:18px;background:rgba(var(--rgb-warning-color),0.10);border:1px solid rgba(var(--rgb-warning-color),0.20);\">\n        <div style=\"display:flex;align-items:center;gap:12px;\">\n          <div style=\"width:40px;height:40px;border-radius:14px;background:rgba(var(--rgb-warning-color),0.16);display:flex;align-items:center;justify-content:center;\">\n            <ha-icon icon=\"mdi:weather-sunny\" style=\"color:var(--warning-color);width:22px;height:22px;\"></ha-icon>\n          </div>\n          <div>\n            <div style=\"font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--secondary-text-color);\">Today forecast</div>\n            <div style=\"font-size:0.98rem;color:var(--primary-text-color);font-weight:700;\">Projected generation</div>\n          </div>\n        </div>\n        <div style=\"font-size:1.18rem;font-weight:800;color:var(--warning-color);\">${state} <span style=\"font-size:0.8rem;opacity:0.8;\">${unit}</span></div>\n      </div>`; ]]]",
+                "row_production": "[[[ const s = states['sensor.lumentree_local_p240819130_daily_pv_energy']; const state = s ? s.state : '—'; const unit = s?.attributes?.unit_of_measurement || 'kWh'; return `\n      <div style=\"display:flex;align-items:center;justify-content:space-between;padding:16px 16px;border-radius:20px;background:linear-gradient(135deg, rgba(var(--rgb-primary-color),0.16) 0%, rgba(var(--rgb-primary-color),0.08) 100%);border:1px solid rgba(var(--rgb-primary-color),0.18);box-shadow:0 10px 24px rgba(15,23,42,0.08);\">\n        <div style=\"display:flex;align-items:center;gap:12px;\">\n          <div style=\"width:44px;height:44px;border-radius:16px;background:rgba(var(--rgb-primary-color),0.14);display:flex;align-items:center;justify-content:center;\">\n            <ha-icon icon=\"mdi:solar-power-variant\" style=\"color:var(--primary-color);width:24px;height:24px;\"></ha-icon>\n          </div>\n          <div>\n            <div style=\"font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--secondary-text-color);\">Live production</div>\n            <div style=\"font-size:1.02rem;color:var(--primary-text-color);font-weight:800;\">Energy generated today</div>\n          </div>\n        </div>\n        <div style=\"font-size:1.34rem;font-weight:900;color:var(--primary-color);\">${state} <span style=\"font-size:0.8rem;opacity:0.8;\">${unit}</span></div>\n      </div>`; ]]]",
+                "row_forecast_tomorrow": "[[[ const s = states['sensor.solcast_pv_forecast_forecast_tomorrow']; const state = s ? s.state : '—'; const unit = s?.attributes?.unit_of_measurement || 'kWh'; return `\n      <div style=\"display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:18px;background:rgba(var(--rgb-info-color),0.10);border:1px solid rgba(var(--rgb-info-color),0.20);\">\n        <div style=\"display:flex;align-items:center;gap:12px;\">\n          <div style=\"width:40px;height:40px;border-radius:14px;background:rgba(var(--rgb-info-color),0.16);display:flex;align-items:center;justify-content:center;\">\n            <ha-icon icon=\"mdi:weather-partly-cloudy\" style=\"color:var(--info-color);width:22px;height:22px;\"></ha-icon>\n          </div>\n          <div>\n            <div style=\"font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--secondary-text-color);\">Tomorrow forecast</div>\n            <div style=\"font-size:0.98rem;color:var(--primary-text-color);font-weight:700;\">Next-day expectation</div>\n          </div>\n        </div>\n        <div style=\"font-size:1.18rem;font-weight:800;color:var(--info-color);\">${state} <span style=\"font-size:0.8rem;opacity:0.8;\">${unit}</span></div>\n      </div>`; ]]]"
               }
             }
           ]
@@ -115,13 +285,13 @@
               "styles": {
                 "card": [
                   {
-                    "padding": "16px"
+                    "padding": "18px"
                   },
                   {
-                    "border-radius": "20px"
+                    "border-radius": "24px"
                   },
                   {
-                    "height": "220px"
+                    "height": "240px"
                   },
                   {
                     "position": "relative"
@@ -130,21 +300,24 @@
                     "overflow": "hidden"
                   },
                   {
-                    "background": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  let baseBg = 'linear-gradient(145deg, #1c1c1c, #262626)';\n  \n  if (power < 0) { \n     // Âm (< 0): Đang SẠC -> Màu Xanh (Green)\n     return `${baseBg}, box-shadow: 0 0 20px rgba(0, 255, 127, 0.3), inset 0 0 2px rgba(0, 255, 127, 0.5)`;\n  } else if (power > 0) { \n     // Dương (> 0): Đang XẢ -> Màu Đỏ (Red)\n     return `${baseBg}, box-shadow: 0 0 20px rgba(255, 99, 71, 0.3), inset 0 0 2px rgba(255, 99, 71, 0.5)`;\n  }\n  // Nghỉ: Viền sáng trắng nhẹ\n  return `${baseBg}, box-shadow: 0 0 10px rgba(255, 255, 255, 0.1)`;\n]]]\n"
+                    "background": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); const base = 'linear-gradient(180deg, var(--ha-card-background, var(--card-background-color)) 0%, rgba(var(--rgb-primary-text-color), 0.03) 100%)'; if (p < 0) return `${base}`; if (p > 0) return `${base}`; return base; ]]]"
                   },
                   {
-                    "border": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  if (power < 0) return '1px solid rgba(0, 255, 127, 0.5)'; // Sạc - Xanh\n  if (power > 0) return '1px solid rgba(255, 99, 71, 0.5)';  // Xả - Đỏ\n  return '1px solid rgba(255, 255, 255, 0.1)';\n]]]\n"
+                    "border": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '1px solid rgba(34, 197, 94, 0.30)'; if (p > 0) return '1px solid rgba(249, 115, 22, 0.30)'; return '1px solid rgba(var(--rgb-primary-text-color), 0.10)'; ]]]"
+                  },
+                  {
+                    "box-shadow": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '0 18px 36px rgba(34, 197, 94, 0.12)'; if (p > 0) return '0 18px 36px rgba(249, 115, 22, 0.14)'; return '0 18px 36px rgba(15, 23, 42, 0.10)'; ]]]"
                   }
                 ],
                 "icon": [
                   {
-                    "color": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  if (power < 0) return 'rgba(0, 255, 127, 0.8)'; // Sạc - Xanh\n  if (power > 0) return 'rgba(255, 99, 71, 0.8)';  // Xả - Đỏ\n  return 'var(--state-icon-color)';\n]]]\n"
+                    "color": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '#22c55e'; if (p > 0) return '#f97316'; return 'var(--state-icon-color)'; ]]]"
                   },
                   {
-                    "width": "120px"
+                    "width": "118px"
                   },
                   {
-                    "height": "120px"
+                    "height": "118px"
                   },
                   {
                     "position": "absolute"
@@ -159,10 +332,10 @@
                     "transform": "translate(-50%, -50%)"
                   },
                   {
-                    "opacity": 0.15
+                    "opacity": 0.12
                   },
                   {
-                    "filter": "blur(5px)"
+                    "filter": "blur(4px)"
                   }
                 ],
                 "custom_fields": {
@@ -171,7 +344,7 @@
                       "position": "absolute"
                     },
                     {
-                      "top": "45%"
+                      "top": "38%"
                     },
                     {
                       "left": "50%"
@@ -183,22 +356,13 @@
                       "font-size": "3rem"
                     },
                     {
-                      "font-weight": 900
+                      "font-weight": "900"
                     },
                     {
                       "z-index": 2
                     },
                     {
-                      "background": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  // Sạc (Âm): Xanh lá -> Xanh dương\n  if (power < 0) return '-webkit-linear-gradient(45deg, #00ff7f, #00bfff)';\n  // Xả (Dương): Đỏ cam -> Vàng\n  if (power > 0) return '-webkit-linear-gradient(45deg, #ff6347, #ffcc00)';\n  return 'var(--text-primary-color)';\n]]]\n"
-                    },
-                    {
-                      "-webkit-background-clip": "text"
-                    },
-                    {
-                      "-webkit-text-fill-color": "transparent"
-                    },
-                    {
-                      "filter": "drop-shadow(0px 0px 5px rgba(0,0,0,0.5))"
+                      "color": "var(--primary-text-color)"
                     }
                   ],
                   "power": [
@@ -206,7 +370,7 @@
                       "position": "absolute"
                     },
                     {
-                      "top": "65%"
+                      "top": "56%"
                     },
                     {
                       "left": "50%"
@@ -215,19 +379,16 @@
                       "transform": "translate(-50%, 0)"
                     },
                     {
-                      "font-size": "1.3rem"
+                      "font-size": "1.18rem"
                     },
                     {
-                      "font-weight": "bold"
+                      "font-weight": "800"
                     },
                     {
                       "z-index": 2
                     },
                     {
-                      "color": "[[[\n  const power = parseFloat(states['sensor.battery_power_adjusted'].state);\n  if (power < 0) return '#00ff7f'; // Sạc - Xanh\n  if (power > 0) return '#ff6347'; // Xả - Đỏ\n  return 'var(--primary-text-color)';\n]]]\n"
-                    },
-                    {
-                      "text-shadow": "0px 0px 10px currentColor"
+                      "color": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '#22c55e'; if (p > 0) return '#f97316'; return 'var(--primary-text-color)'; ]]]"
                     }
                   ],
                   "top_left": [
@@ -244,10 +405,10 @@
                       "text-align": "left"
                     },
                     {
-                      "border-left": "3px solid rgba(255,255,255,0.3)"
+                      "padding-left": "10px"
                     },
                     {
-                      "padding-left": "8px"
+                      "border-left": "3px solid rgba(var(--rgb-primary-color), 0.30)"
                     }
                   ],
                   "top_right": [
@@ -264,30 +425,10 @@
                       "text-align": "right"
                     },
                     {
-                      "border-right": "3px solid rgba(255,255,255,0.3)"
+                      "padding-right": "10px"
                     },
                     {
-                      "padding-right": "8px"
-                    }
-                  ],
-                  "bottom_left": [
-                    {
-                      "position": "absolute"
-                    },
-                    {
-                      "bottom": "16px"
-                    },
-                    {
-                      "left": "16px"
-                    },
-                    {
-                      "text-align": "left"
-                    },
-                    {
-                      "border-left": "3px solid rgba(255,255,255,0.3)"
-                    },
-                    {
-                      "padding-left": "8px"
+                      "border-right": "3px solid rgba(var(--rgb-primary-color), 0.30)"
                     }
                   ],
                   "bottom_right": [
@@ -304,20 +445,56 @@
                       "text-align": "right"
                     },
                     {
-                      "border-right": "3px solid rgba(255,255,255,0.3)"
+                      "padding-right": "10px"
                     },
                     {
-                      "padding-right": "8px"
+                      "border-right": "3px solid rgba(var(--rgb-primary-color), 0.30)"
+                    }
+                  ],
+                  "mode": [
+                    {
+                      "position": "absolute"
+                    },
+                    {
+                      "bottom": "18px"
+                    },
+                    {
+                      "left": "16px"
+                    },
+                    {
+                      "padding": "6px 12px"
+                    },
+                    {
+                      "border-radius": "999px"
+                    },
+                    {
+                      "background": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return 'rgba(34, 197, 94, 0.14)'; if (p > 0) return 'rgba(249, 115, 22, 0.14)'; return 'rgba(var(--rgb-primary-color), 0.10)'; ]]]"
+                    },
+                    {
+                      "color": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '#15803d'; if (p > 0) return '#c2410c'; return 'var(--primary-color)'; ]]]"
+                    },
+                    {
+                      "font-size": "0.78rem"
+                    },
+                    {
+                      "font-weight": "800"
+                    },
+                    {
+                      "letter-spacing": "0.08em"
+                    },
+                    {
+                      "text-transform": "uppercase"
                     }
                   ]
                 }
               },
               "custom_fields": {
-                "soc": "[[[\n  const soc = parseFloat(states['sensor.lumentree_local_p240819130_battery_soc'].state) || 0;\n  return `${soc.toFixed(0)}%`;\n]]]\n",
-                "power": "[[[\n  const adjustedPower = parseFloat(states['sensor.battery_power_adjusted'].state) || 0;\n  // LOGIC: Dương = Xả, Âm = Sạc, ~0 = Nghỉ\n  const prefix = adjustedPower > 0 ? 'Xả: ' : adjustedPower < 0 ? 'Sạc: ' : 'Nghỉ: ';\n  return `${prefix}${Math.abs(adjustedPower).toFixed(0)} W`;\n]]]\n",
-                "top_left": "[[[\n  const soc = parseFloat(states['sensor.lumentree_local_p240819130_battery_soc'].state) || 0;\n  const remaining = (14 * soc / 100).toFixed(1);\n  \n  const adjustedPower = parseFloat(states['sensor.battery_power_adjusted'].state) || 0;\n  const chargePowerAbs = Math.abs(adjustedPower);\n  let timeLabel = 'Thời gian:';\n  let timeStr = '—';\n\n  if (chargePowerAbs >= 10) {\n    let hoursTotal = 0;\n    \n    if (adjustedPower > 0) { \n       // Dương: ĐANG XẢ -> Tính thời gian CẠN (Empty)\n       timeLabel = 'Cạn sau:';\n       hoursTotal = (14 * (soc / 100)) / (chargePowerAbs / 1000);\n    } else { \n       // Âm: ĐANG SẠC -> Tính thời gian ĐẦY (Full)\n       timeLabel = 'Đầy sau:';\n       hoursTotal = (14 * (1 - soc / 100)) / (chargePowerAbs / 1000);\n    }\n\n    if (isFinite(hoursTotal)) {\n      const h = Math.floor(hoursTotal);\n      const m = Math.round((hoursTotal - h) * 60);\n      timeStr = `${h}h ${m}m`;\n    }\n  }\n\n  const labelStyle = 'color: var(--text-secondary-color); font-size: 0.8rem;';\n  const valStyle = 'color: white; font-weight: bold; font-size: 0.9rem;';\n\n  return `\n    <div><span style=\"${labelStyle}\">Tổng pin:</span> <span style=\"${valStyle}\">14 số</span></div>\n    <div><span style=\"${labelStyle}\">Còn lại:</span> <span style=\"${valStyle}\">${remaining} số</span></div>\n    <div style=\"margin-top: 4px;\"><span style=\"${labelStyle}\">${timeLabel}</span> <br><span style=\"${valStyle}; font-size: 1rem; color: var(--primary-color)\">${timeStr}</span></div>\n  `;\n]]]\n",
-                "top_right": "[[[\n  const charge = parseFloat(states['sensor.lumentree_local_p240819130_daily_battery_charge_energy'].state) || 0;\n  const discharge = parseFloat(states['sensor.lumentree_local_p240819130_daily_battery_discharge_energy'].state) || 0;\n  \n  const labelStyle = 'color: var(--text-secondary-color); font-size: 0.8rem;';\n  const chargeValStyle = 'color: #00ff7f; font-weight: bold; font-size: 0.9rem;';\n  const dischargeValStyle = 'color: #ff6347; font-weight: bold; font-size: 0.9rem;';\n\n  return `\n    <div><span style=\"${labelStyle}\">Sạc hôm nay:</span> <span style=\"${chargeValStyle}\">${charge.toFixed(1)} số</span></div>\n    <div><span style=\"${labelStyle}\">Xả hôm nay:</span> <span style=\"${dischargeValStyle}\">${discharge.toFixed(1)} số</span></div>\n  `;\n]]]\n",
-                "bottom_right": "[[[\n  const load = states['sensor.tai_tong_nha'].state;\n  const cost = parseFloat(states['sensor.tien_phai_tra_neu_khong_co_nlmt'].state);\n  const costStr = isNaN(cost) ? 'N/A' : `${cost.toLocaleString('vi-VN')} đ`;\n\n  const labelStyle = 'color: var(--text-secondary-color); font-size: 0.8rem;';\n  const valStyle = 'color: white; font-weight: bold; font-size: 0.9rem;';\n\n  return `\n    <div><span style=\"${labelStyle}\">Số điện:</span><br><span style=\"${valStyle}\">${load} số</span></div>\n    <div style=\"margin-top: 4px;\"><span style=\"${labelStyle}\">Tiền thực:</span><br><span style=\"${valStyle}\">${costStr}</span></div>\n  `;\n]]]\n"
+                "soc": "[[[ const soc = parseFloat(states['sensor.lumentree_local_p240819130_battery_soc']?.state || 0); return `${soc.toFixed(0)}%`; ]]]",
+                "power": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); const prefix = p > 0 ? 'Discharge' : p < 0 ? 'Charge' : 'Idle'; return `${prefix} ${Math.abs(p).toFixed(0)} W`; ]]]",
+                "top_left": "[[[ const soc = parseFloat(states['sensor.lumentree_local_p240819130_battery_soc']?.state || 0); const remaining = (14 * soc / 100).toFixed(1); const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); const abs = Math.abs(p); let label = 'Standby'; let time = '—'; if (abs >= 10) { if (p > 0) { label = 'Empty in'; const hours = (14 * (soc / 100)) / (abs / 1000); if (isFinite(hours)) { const h = Math.floor(hours); const m = Math.round((hours - h) * 60); time = `${h}h ${m}m`; } } else if (p < 0) { label = 'Full in'; const hours = (14 * (1 - soc / 100)) / (abs / 1000); if (isFinite(hours)) { const h = Math.floor(hours); const m = Math.round((hours - h) * 60); time = `${h}h ${m}m`; } } } return `<div style=\"font-size:0.76rem;color:var(--secondary-text-color);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;\">Battery</div><div style=\"font-size:0.95rem;color:var(--primary-text-color);font-weight:800;margin-top:2px;\">${remaining} / 14 kWh</div><div style=\"font-size:0.78rem;color:var(--secondary-text-color);margin-top:8px;\">${label}</div><div style=\"font-size:1rem;color:var(--primary-color);font-weight:800;\">${time}</div>`; ]]]",
+                "top_right": "[[[ const charge = parseFloat(states['sensor.lumentree_local_p240819130_daily_battery_charge_energy']?.state || 0); const discharge = parseFloat(states['sensor.lumentree_local_p240819130_daily_battery_discharge_energy']?.state || 0); return `<div style=\"font-size:0.76rem;color:var(--secondary-text-color);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;\">Today</div><div style=\"font-size:0.92rem;color:#16a34a;font-weight:800;margin-top:4px;\">Charge ${charge.toFixed(1)} kWh</div><div style=\"font-size:0.92rem;color:#ea580c;font-weight:800;margin-top:4px;\">Discharge ${discharge.toFixed(1)} kWh</div>`; ]]]",
+                "bottom_right": "[[[ const load = states['sensor.tai_tong_nha']?.state || '—'; const cost = parseFloat(states['sensor.tien_phai_tra_neu_khong_co_nlmt']?.state); const costStr = isNaN(cost) ? 'N/A' : `${cost.toLocaleString('vi-VN')} đ`; return `<div style=\"font-size:0.76rem;color:var(--secondary-text-color);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;\">House</div><div style=\"font-size:0.95rem;color:var(--primary-text-color);font-weight:800;margin-top:4px;\">${load} số</div><div style=\"font-size:0.85rem;color:var(--secondary-text-color);margin-top:8px;\">Equivalent bill</div><div style=\"font-size:0.95rem;color:var(--primary-text-color);font-weight:800;\">${costStr}</div>`; ]]]",
+                "mode": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return 'Charging'; if (p > 0) return 'Discharging'; return 'Idle'; ]]]"
               }
             }
           ]
@@ -789,6 +966,123 @@
                   "additional-tasks"
                 ]
               }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sections",
+      "max_columns": 4,
+      "title": "Control Lumentree",
+      "path": "control-lumentree",
+      "visible": [
+        {
+          "user": "b7a4ee103d8e4e59b2b3aa39425819fb"
+        }
+      ],
+      "sections": [
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "entities",
+              "title": "Quyền write",
+              "show_header_toggle": false,
+              "entities": [
+                "binary_sensor.lumentree_local_p240819130_write_grant_active",
+                "sensor.lumentree_local_p240819130_write_access_status",
+                "sensor.lumentree_local_p240819130_last_command_status",
+                "sensor.lumentree_local_p240819130_last_command_error"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "entities",
+              "title": "Mains charge the battery",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "type": "section",
+                  "label": "Slot 1"
+                },
+                "switch.lumentree_local_p240819130_mains_charge_slot_1_enabled",
+                "time.lumentree_local_p240819130_mains_charge_slot_1_start_time",
+                "time.lumentree_local_p240819130_mains_charge_slot_1_end_time",
+                "number.lumentree_local_p240819130_mains_charge_slot_1_target_soc",
+                {
+                  "type": "section",
+                  "label": "Slot 2"
+                },
+                "switch.lumentree_local_p240819130_mains_charge_slot_2_enabled",
+                "time.lumentree_local_p240819130_mains_charge_slot_2_start_time",
+                "time.lumentree_local_p240819130_mains_charge_slot_2_end_time",
+                "number.lumentree_local_p240819130_mains_charge_slot_2_target_soc"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "entities",
+              "title": "The battery discharges to the loads (Slot 1-2)",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "type": "section",
+                  "label": "Slot 1"
+                },
+                "switch.lumentree_local_p240819130_discharge_slot_1_enabled",
+                "time.lumentree_local_p240819130_discharge_slot_1_start_time",
+                "time.lumentree_local_p240819130_discharge_slot_1_end_time",
+                "number.lumentree_local_p240819130_discharge_slot_1_power",
+                "number.lumentree_local_p240819130_discharge_slot_1_target_soc",
+                {
+                  "type": "section",
+                  "label": "Slot 2"
+                },
+                "switch.lumentree_local_p240819130_discharge_slot_2_enabled",
+                "time.lumentree_local_p240819130_discharge_slot_2_start_time",
+                "time.lumentree_local_p240819130_discharge_slot_2_end_time",
+                "number.lumentree_local_p240819130_discharge_slot_2_power",
+                "number.lumentree_local_p240819130_discharge_slot_2_target_soc"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "entities",
+              "title": "The battery discharges to the loads (Slot 3-4)",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "type": "section",
+                  "label": "Slot 3"
+                },
+                "switch.lumentree_local_p240819130_discharge_slot_3_enabled",
+                "time.lumentree_local_p240819130_discharge_slot_3_start_time",
+                "time.lumentree_local_p240819130_discharge_slot_3_end_time",
+                "number.lumentree_local_p240819130_discharge_slot_3_power",
+                "number.lumentree_local_p240819130_discharge_slot_3_target_soc",
+                {
+                  "type": "section",
+                  "label": "Slot 4"
+                },
+                "switch.lumentree_local_p240819130_discharge_slot_4_enabled",
+                "time.lumentree_local_p240819130_discharge_slot_4_start_time",
+                "time.lumentree_local_p240819130_discharge_slot_4_end_time",
+                "number.lumentree_local_p240819130_discharge_slot_4_power",
+                "number.lumentree_local_p240819130_discharge_slot_4_target_soc"
+              ]
             }
           ]
         }
