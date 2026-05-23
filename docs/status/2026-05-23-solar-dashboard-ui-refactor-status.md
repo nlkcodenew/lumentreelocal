@@ -52,9 +52,11 @@ This keeps the toggle low-risk and avoids introducing extra helper state just fo
 
 - Repository cloned locally for refactor work:
   - `/home/mrlinh/my-3d-energy-card`
-- Intended card changes:
-  - make `NLK-3d-energy-card.js` more theme-friendly in both light and dark modes
-  - release a new HACS-visible version for the dashboard to pick up after update
+- Completed card changes:
+  - `NLK-3d-energy-card.js` updated to a more theme-friendly shell for both light and dark modes
+  - released through GitHub/HACS as:
+    - `v1.6.2`
+    - `https://github.com/nlkcodenew/my-3d-energy-card/releases/tag/v1.6.2`
 
 ## Validation performed
 
@@ -66,4 +68,4 @@ This keeps the toggle low-risk and avoids introducing extra helper state just fo
 ## Remaining operational step
 
 - The live dashboard config is already updated.
-- The custom card repo still needs to be committed, pushed, tagged, and then updated through HACS on the Home Assistant side so the new theme-aware card shell is actually served from `/hacsfiles/my-3d-energy-card/...`.
+- Home Assistant still needs the HACS card update applied on the running instance so the new theme-aware card shell is actually served from `/hacsfiles/my-3d-energy-card/...`.
