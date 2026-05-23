@@ -35,6 +35,8 @@ remote = origin
    charge/discharge overlap protection across HA, server, and firmware
 8. `docs/status/2026-05-21-schedule-safety-implementation-status.md` for the
    implementation result, validation, and rollout caveats
+9. `docs/status/2026-05-23-battery-card-and-billing-cycle-refactor.md` for the
+   Solar dashboard battery-source cleanup and EVN billing-cycle sensors
 
 ## Current Baseline
 

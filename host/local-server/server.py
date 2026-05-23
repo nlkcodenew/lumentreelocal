@@ -381,6 +381,26 @@ def local_year_range(value: datetime) -> tuple[date, date]:
   return date(local_now.year, 1, 1), date(local_now.year + 1, 1, 1)
 
 
+def local_billing_cycle_range(value: datetime, reset_day: int = 22) -> tuple[date, date]:
+  """Return the current billing-cycle date range [start, end)."""
+  local_now = value.astimezone(LOCAL_TIMEZONE)
+  today = local_now.date()
+  if today.day >= reset_day:
+    start = date(today.year, today.month, reset_day)
+    if today.month == 12:
+      end = date(today.year + 1, 1, reset_day)
+    else:
+      end = date(today.year, today.month + 1, reset_day)
+    return start, end
+
+  if today.month == 1:
+    start = date(today.year - 1, 12, reset_day)
+  else:
+    start = date(today.year, today.month - 1, reset_day)
+  end = date(today.year, today.month, reset_day)
+  return start, end
+
+
 def local_day_segments(start_at: datetime, end_at: datetime) -> list[tuple[date, float, datetime, datetime]]:
   segments = []
   cursor = start_at.astimezone(LOCAL_TIMEZONE)
@@ -2170,6 +2190,8 @@ class LumentreeServer:
     today = now_local.date()
     month_start, month_end = local_month_range(now_local)
     year_start, year_end = local_year_range(now_local)
+    billing_cycle_start, billing_cycle_end = local_billing_cycle_range(now_local)
+    billing_cycle_reset_day = billing_cycle_start.day
     with self.connect() as conn:
       with conn.cursor() as cur:
         cur.execute(
@@ -2247,6 +2269,30 @@ class LumentreeServer:
             MAX(last_observed_at) AS last_observed_at
           FROM lumentree_energy_daily
           WHERE device_id = %s
+            AND day >= %s
+            AND day < %s
+          """,
+          (device_id, billing_cycle_start, billing_cycle_end),
+        )
+        billing_cycle = rounded_energy(cur.fetchone())
+
+        cur.execute(
+          """
+          SELECT
+            SUM(pv_kwh) AS pv_kwh,
+            SUM(load_kwh) AS load_kwh,
+            SUM(grid_in_kwh) AS grid_in_kwh,
+            SUM(grid_out_kwh) AS grid_out_kwh,
+            SUM(battery_charge_kwh) AS battery_charge_kwh,
+            SUM(battery_discharge_kwh) AS battery_discharge_kwh,
+            SUM(ac_input_kwh) AS ac_input_kwh,
+            SUM(ac_output_kwh) AS ac_output_kwh,
+            SUM(sample_count) AS sample_count,
+            SUM(covered_seconds) AS covered_seconds,
+            MIN(first_observed_at) AS first_observed_at,
+            MAX(last_observed_at) AS last_observed_at
+          FROM lumentree_energy_daily
+          WHERE device_id = %s
           """,
           (device_id,),
         )
@@ -2256,7 +2302,11 @@ class LumentreeServer:
       "device_id": device_id,
       "timezone": LOCAL_TIMEZONE_NAME,
       "daily_reset_time": "00:00",
+      "billing_cycle_reset_day": billing_cycle_reset_day,
+      "billing_cycle_start": billing_cycle_start.isoformat(),
+      "billing_cycle_end": billing_cycle_end.isoformat(),
       "daily": daily,
+      "billing_cycle": billing_cycle,
       "monthly": monthly,
       "yearly": yearly,
       "total": total,

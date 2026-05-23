@@ -176,6 +176,12 @@ Current behavior:
 - server stores telemetry and energy history in Postgres
 - Home Assistant exposes realtime sensors, energy sensors, diagnostics, and
   guarded write entities when authorized
+- the Solar dashboard now prefers inverter-native battery power and status
+  instead of the legacy adjusted helper
+- the integration/server now expose billing-cycle load energy plus an estimated
+  equivalent bill for the EVN-style cycle:
+  - reset boundary: `22nd 00:00`
+  - cycle end: next `22nd 00:00`
 
 ### 8. Current important caveats
 

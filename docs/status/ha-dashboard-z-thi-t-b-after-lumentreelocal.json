@@ -62,14 +62,14 @@
               },
               "custom_fields": {
                 "title": "[[[ return '<div style=\"font-size:1.25rem;font-weight:800;letter-spacing:0.02em;color:var(--primary-text-color);\">Solar Dashboard</div>'; ]]]",
-                "subtitle": "[[[ return '<div style=\"font-size:0.95rem;line-height:1.45;color:var(--secondary-text-color);\">Live flow overview, forecast and battery controls. Use the buttons on the right to switch the Solar tab between Light and Dark instantly.</div>'; ]]]"
+                "subtitle": "[[[ return '<div style=\"font-size:0.95rem;line-height:1.45;color:var(--secondary-text-color);\">Live flow overview, forecast, and battery insights that follow your Home Assistant theme automatically.</div>'; ]]]"
               }
             }
           ]
         },
         {
           "type": "grid",
-          "column_span": 2,
+          "column_span": 1,
           "cards": [
             {
               "type": "custom:nlk-3d-energy-card",
@@ -101,7 +101,11 @@
               "battery_capacity": 14,
               "card_size": "normal",
               "flow_style": "dots",
-              "compact_mode": true
+              "compact_mode": true,
+              "grid_options": {
+                "columns": 12,
+                "rows": "auto"
+              }
             }
           ]
         },
@@ -187,18 +191,18 @@
                     "overflow": "hidden"
                   },
                   {
-                    "background": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); const base = 'linear-gradient(180deg, var(--ha-card-background, var(--card-background-color)) 0%, rgba(var(--rgb-primary-text-color), 0.03) 100%)'; if (p < 0) return `${base}`; if (p > 0) return `${base}`; return base; ]]]"
+                    "background": "[[[ const p = parseFloat(states['sensor.lumentree_local_p240819130_battery_power']?.state || 0); const base = 'linear-gradient(180deg, var(--ha-card-background, var(--card-background-color)) 0%, rgba(var(--rgb-primary-text-color), 0.03) 100%)'; if (p < 0) return `${base}`; if (p > 0) return `${base}`; return base; ]]]"
                   },
                   {
-                    "border": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '1px solid rgba(34, 197, 94, 0.30)'; if (p > 0) return '1px solid rgba(249, 115, 22, 0.30)'; return '1px solid rgba(var(--rgb-primary-text-color), 0.10)'; ]]]"
+                    "border": "[[[ const p = parseFloat(states['sensor.lumentree_local_p240819130_battery_power']?.state || 0); if (p < 0) return '1px solid rgba(34, 197, 94, 0.30)'; if (p > 0) return '1px solid rgba(249, 115, 22, 0.30)'; return '1px solid rgba(var(--rgb-primary-text-color), 0.10)'; ]]]"
                   },
                   {
-                    "box-shadow": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '0 18px 36px rgba(34, 197, 94, 0.12)'; if (p > 0) return '0 18px 36px rgba(249, 115, 22, 0.14)'; return '0 18px 36px rgba(15, 23, 42, 0.10)'; ]]]"
+                    "box-shadow": "[[[ const p = parseFloat(states['sensor.lumentree_local_p240819130_battery_power']?.state || 0); if (p < 0) return '0 18px 36px rgba(34, 197, 94, 0.12)'; if (p > 0) return '0 18px 36px rgba(249, 115, 22, 0.14)'; return '0 18px 36px rgba(15, 23, 42, 0.10)'; ]]]"
                   }
                 ],
                 "icon": [
                   {
-                    "color": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '#22c55e'; if (p > 0) return '#f97316'; return 'var(--state-icon-color)'; ]]]"
+                    "color": "[[[ const p = parseFloat(states['sensor.lumentree_local_p240819130_battery_power']?.state || 0); if (p < 0) return '#22c55e'; if (p > 0) return '#f97316'; return 'var(--state-icon-color)'; ]]]"
                   },
                   {
                     "width": "118px"
@@ -275,7 +279,7 @@
                       "z-index": 2
                     },
                     {
-                      "color": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '#22c55e'; if (p > 0) return '#f97316'; return 'var(--primary-text-color)'; ]]]"
+                      "color": "[[[ const p = parseFloat(states['sensor.lumentree_local_p240819130_battery_power']?.state || 0); if (p < 0) return '#22c55e'; if (p > 0) return '#f97316'; return 'var(--primary-text-color)'; ]]]"
                     }
                   ],
                   "top_left": [
@@ -355,10 +359,10 @@
                       "border-radius": "999px"
                     },
                     {
-                      "background": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return 'rgba(34, 197, 94, 0.14)'; if (p > 0) return 'rgba(249, 115, 22, 0.14)'; return 'rgba(var(--rgb-primary-color), 0.10)'; ]]]"
+                      "background": "[[[ const p = parseFloat(states['sensor.lumentree_local_p240819130_battery_power']?.state || 0); if (p < 0) return 'rgba(34, 197, 94, 0.14)'; if (p > 0) return 'rgba(249, 115, 22, 0.14)'; return 'rgba(var(--rgb-primary-color), 0.10)'; ]]]"
                     },
                     {
-                      "color": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return '#15803d'; if (p > 0) return '#c2410c'; return 'var(--primary-color)'; ]]]"
+                      "color": "[[[ const p = parseFloat(states['sensor.lumentree_local_p240819130_battery_power']?.state || 0); if (p < 0) return '#15803d'; if (p > 0) return '#c2410c'; return 'var(--primary-color)'; ]]]"
                     },
                     {
                       "font-size": "0.78rem"
@@ -377,11 +381,11 @@
               },
               "custom_fields": {
                 "soc": "[[[ const soc = parseFloat(states['sensor.lumentree_local_p240819130_battery_soc']?.state || 0); return `${soc.toFixed(0)}%`; ]]]",
-                "power": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); const prefix = p > 0 ? 'Discharge' : p < 0 ? 'Charge' : 'Idle'; return `${prefix} ${Math.abs(p).toFixed(0)} W`; ]]]",
-                "top_left": "[[[ const soc = parseFloat(states['sensor.lumentree_local_p240819130_battery_soc']?.state || 0); const remaining = (14 * soc / 100).toFixed(1); const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); const abs = Math.abs(p); let label = 'Standby'; let time = '—'; if (abs >= 10) { if (p > 0) { label = 'Empty in'; const hours = (14 * (soc / 100)) / (abs / 1000); if (isFinite(hours)) { const h = Math.floor(hours); const m = Math.round((hours - h) * 60); time = `${h}h ${m}m`; } } else if (p < 0) { label = 'Full in'; const hours = (14 * (1 - soc / 100)) / (abs / 1000); if (isFinite(hours)) { const h = Math.floor(hours); const m = Math.round((hours - h) * 60); time = `${h}h ${m}m`; } } } return `<div style=\"font-size:0.76rem;color:var(--secondary-text-color);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;\">Battery</div><div style=\"font-size:0.95rem;color:var(--primary-text-color);font-weight:800;margin-top:2px;\">${remaining} / 14 kWh</div><div style=\"font-size:0.78rem;color:var(--secondary-text-color);margin-top:8px;\">${label}</div><div style=\"font-size:1rem;color:var(--primary-color);font-weight:800;\">${time}</div>`; ]]]",
+                "power": "[[[ const p = parseFloat(states['sensor.lumentree_local_p240819130_battery_power']?.state || 0); const status = (states['sensor.lumentree_local_p240819130_battery_status']?.state || '').toLowerCase(); const prefix = status.includes('charg') ? 'Charge' : status.includes('discharg') ? 'Discharge' : Math.abs(p) < 1 ? 'Idle' : 'Battery'; return `${prefix} ${Math.abs(p).toFixed(0)} W`; ]]]",
+                "top_left": "[[[ const soc = parseFloat(states['sensor.lumentree_local_p240819130_battery_soc']?.state || 0); const remaining = (14 * soc / 100).toFixed(1); const p = parseFloat(states['sensor.lumentree_local_p240819130_battery_power']?.state || 0); const status = (states['sensor.lumentree_local_p240819130_battery_status']?.state || '').toLowerCase(); const abs = Math.abs(p); let label = 'Standby'; let time = '—'; if (abs >= 10) { if (status.includes('discharg')) { label = 'Empty in'; const hours = (14 * (soc / 100)) / (abs / 1000); if (isFinite(hours)) { const h = Math.floor(hours); const m = Math.round((hours - h) * 60); time = `${h}h ${m}m`; } } else if (status.includes('charg')) { label = 'Full in'; const hours = (14 * (1 - soc / 100)) / (abs / 1000); if (isFinite(hours)) { const h = Math.floor(hours); const m = Math.round((hours - h) * 60); time = `${h}h ${m}m`; } } } return `<div style=\"font-size:0.76rem;color:var(--secondary-text-color);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;\">Battery</div><div style=\"font-size:0.95rem;color:var(--primary-text-color);font-weight:800;margin-top:2px;\">${remaining} / 14 kWh</div><div style=\"font-size:0.78rem;color:var(--secondary-text-color);margin-top:8px;\">${label}</div><div style=\"font-size:1rem;color:var(--primary-color);font-weight:800;\">${time}</div>`; ]]]",
                 "top_right": "[[[ const charge = parseFloat(states['sensor.lumentree_local_p240819130_daily_battery_charge_energy']?.state || 0); const discharge = parseFloat(states['sensor.lumentree_local_p240819130_daily_battery_discharge_energy']?.state || 0); return `<div style=\"font-size:0.76rem;color:var(--secondary-text-color);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;\">Today</div><div style=\"font-size:0.92rem;color:#16a34a;font-weight:800;margin-top:4px;\">Charge ${charge.toFixed(1)} kWh</div><div style=\"font-size:0.92rem;color:#ea580c;font-weight:800;margin-top:4px;\">Discharge ${discharge.toFixed(1)} kWh</div>`; ]]]",
-                "bottom_right": "[[[ const load = states['sensor.tai_tong_nha']?.state || '—'; const cost = parseFloat(states['sensor.tien_phai_tra_neu_khong_co_nlmt']?.state); const costStr = isNaN(cost) ? 'N/A' : `${cost.toLocaleString('vi-VN')} đ`; return `<div style=\"font-size:0.76rem;color:var(--secondary-text-color);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;\">House</div><div style=\"font-size:0.95rem;color:var(--primary-text-color);font-weight:800;margin-top:4px;\">${load} số</div><div style=\"font-size:0.85rem;color:var(--secondary-text-color);margin-top:8px;\">Equivalent bill</div><div style=\"font-size:0.95rem;color:var(--primary-text-color);font-weight:800;\">${costStr}</div>`; ]]]",
-                "mode": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return 'Charging'; if (p > 0) return 'Discharging'; return 'Idle'; ]]]"
+                "bottom_right": "[[[ const cycleLoad = states['sensor.lumentree_local_p240819130_billing_cycle_load_energy']?.state; const legacyLoad = states['sensor.tai_tong_nha']?.state; const load = cycleLoad ?? legacyLoad ?? '—'; const cycleBillState = states['sensor.lumentree_local_p240819130_billing_cycle_equivalent_bill']?.state; const legacyBillState = states['sensor.tien_phai_tra_neu_khong_co_nlmt']?.state; const cost = parseFloat(cycleBillState ?? legacyBillState); const costStr = isNaN(cost) ? 'N/A' : `${cost.toLocaleString('vi-VN')} đ`; return `<div style=\"font-size:0.76rem;color:var(--secondary-text-color);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;\">House</div><div style=\"font-size:0.95rem;color:var(--primary-text-color);font-weight:800;margin-top:4px;\">${load} kWh</div><div style=\"font-size:0.85rem;color:var(--secondary-text-color);margin-top:8px;\">Equivalent bill</div><div style=\"font-size:0.95rem;color:var(--primary-text-color);font-weight:800;\">${costStr}</div>`; ]]]",
+                "mode": "[[[ const status = states['sensor.lumentree_local_p240819130_battery_status']?.state || 'Idle'; return status; ]]]"
               }
             }
           ],
