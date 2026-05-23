@@ -64,120 +64,6 @@
                 "title": "[[[ return '<div style=\"font-size:1.25rem;font-weight:800;letter-spacing:0.02em;color:var(--primary-text-color);\">Solar Dashboard</div>'; ]]]",
                 "subtitle": "[[[ return '<div style=\"font-size:0.95rem;line-height:1.45;color:var(--secondary-text-color);\">Live flow overview, forecast and battery controls. Use the buttons on the right to switch the Solar tab between Light and Dark instantly.</div>'; ]]]"
               }
-            },
-            {
-              "type": "custom:button-card",
-              "name": "Light",
-              "icon": "mdi:white-balance-sunny",
-              "tap_action": {
-                "action": "call-service",
-                "service": "frontend.set_theme",
-                "service_data": {
-                  "name": "default",
-                  "mode": "light"
-                }
-              },
-              "styles": {
-                "card": [
-                  {
-                    "height": "100%"
-                  },
-                  {
-                    "padding": "16px"
-                  },
-                  {
-                    "border-radius": "22px"
-                  },
-                  {
-                    "background": "linear-gradient(160deg, var(--ha-card-background, var(--card-background-color)) 0%, rgba(var(--rgb-primary-color), 0.04) 100%)"
-                  },
-                  {
-                    "border": "1px solid rgba(var(--rgb-primary-color), 0.12)"
-                  },
-                  {
-                    "box-shadow": "0 12px 28px rgba(15, 23, 42, 0.10)"
-                  }
-                ],
-                "icon": [
-                  {
-                    "color": "var(--primary-color)"
-                  },
-                  {
-                    "width": "32px"
-                  },
-                  {
-                    "height": "32px"
-                  }
-                ],
-                "name": [
-                  {
-                    "font-size": "1rem"
-                  },
-                  {
-                    "font-weight": "700"
-                  },
-                  {
-                    "color": "var(--primary-text-color)"
-                  }
-                ]
-              }
-            },
-            {
-              "type": "custom:button-card",
-              "name": "Dark",
-              "icon": "mdi:weather-night",
-              "tap_action": {
-                "action": "call-service",
-                "service": "frontend.set_theme",
-                "service_data": {
-                  "name": "default",
-                  "mode": "dark"
-                }
-              },
-              "styles": {
-                "card": [
-                  {
-                    "height": "100%"
-                  },
-                  {
-                    "padding": "16px"
-                  },
-                  {
-                    "border-radius": "22px"
-                  },
-                  {
-                    "background": "linear-gradient(160deg, var(--ha-card-background, var(--card-background-color)) 0%, rgba(var(--rgb-primary-color), 0.04) 100%)"
-                  },
-                  {
-                    "border": "1px solid rgba(var(--rgb-primary-color), 0.12)"
-                  },
-                  {
-                    "box-shadow": "0 12px 28px rgba(15, 23, 42, 0.10)"
-                  }
-                ],
-                "icon": [
-                  {
-                    "color": "var(--primary-color)"
-                  },
-                  {
-                    "width": "32px"
-                  },
-                  {
-                    "height": "32px"
-                  }
-                ],
-                "name": [
-                  {
-                    "font-size": "1rem"
-                  },
-                  {
-                    "font-weight": "700"
-                  },
-                  {
-                    "color": "var(--primary-text-color)"
-                  }
-                ]
-              }
             }
           ]
         },
@@ -268,7 +154,8 @@
                 "row_forecast_tomorrow": "[[[ const s = states['sensor.solcast_pv_forecast_forecast_tomorrow']; const state = s ? s.state : '—'; const unit = s?.attributes?.unit_of_measurement || 'kWh'; return `\n      <div style=\"display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:18px;background:rgba(var(--rgb-info-color),0.10);border:1px solid rgba(var(--rgb-info-color),0.20);\">\n        <div style=\"display:flex;align-items:center;gap:12px;\">\n          <div style=\"width:40px;height:40px;border-radius:14px;background:rgba(var(--rgb-info-color),0.16);display:flex;align-items:center;justify-content:center;\">\n            <ha-icon icon=\"mdi:weather-partly-cloudy\" style=\"color:var(--info-color);width:22px;height:22px;\"></ha-icon>\n          </div>\n          <div>\n            <div style=\"font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--secondary-text-color);\">Tomorrow forecast</div>\n            <div style=\"font-size:0.98rem;color:var(--primary-text-color);font-weight:700;\">Next-day expectation</div>\n          </div>\n        </div>\n        <div style=\"font-size:1.18rem;font-weight:800;color:var(--info-color);\">${state} <span style=\"font-size:0.8rem;opacity:0.8;\">${unit}</span></div>\n      </div>`; ]]]"
               }
             }
-          ]
+          ],
+          "column_span": 1
         },
         {
           "type": "grid",
@@ -497,7 +384,8 @@
                 "mode": "[[[ const p = parseFloat(states['sensor.battery_power_adjusted']?.state || 0); if (p < 0) return 'Charging'; if (p > 0) return 'Discharging'; return 'Idle'; ]]]"
               }
             }
-          ]
+          ],
+          "column_span": 1
         }
       ],
       "header": {

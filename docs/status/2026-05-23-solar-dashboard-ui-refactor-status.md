@@ -7,9 +7,7 @@ Date: 2026-05-23
 - Audited the live Lovelace storage dashboard `z-thi-t-b` and confirmed the active `Solar` view is stored in Home Assistant, not maintained as a primary source file in this repo.
 - Backed up the live dashboard config and the current `my-3d-energy-card` worktree before editing.
 - Reworked the live `Solar` tab layout toward a more modern structure:
-  - top toolbar row
-  - Light button
-  - Dark button
+  - top intro row
   - wide live energy-flow overview card
   - forecast card
   - battery summary card
@@ -32,21 +30,16 @@ Date: 2026-05-23
 - `Solar` view changes:
   - `max_columns` moved to `4`
   - `sections` count moved from `3` to `4`
-  - section 1: toolbar + `Light` / `Dark` theme actions
+  - section 1: compact intro card
   - section 2: `custom:nlk-3d-energy-card` retained as the primary overview
   - section 3: theme-aware solar forecast card
   - section 4: theme-aware battery summary card
 
 ## Theme toggle approach
 
-- The toggle does not rely on a new helper entity.
-- It uses the built-in Home Assistant service:
-  - `frontend.set_theme`
-- It targets the built-in `default` theme with:
-  - `mode: light`
-  - `mode: dark`
-
-This keeps the toggle low-risk and avoids introducing extra helper state just for the dashboard.
+- The temporary in-dashboard `Light` / `Dark` buttons were removed after runtime testing.
+- The `Solar` tab should now follow Home Assistant's native theme mode per user profile.
+- The custom card shell was adjusted to rely more cleanly on Home Assistant theme variables so light/dark switching comes from the platform instead of dashboard-local controls.
 
 ## Custom card follow-up
 
