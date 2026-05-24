@@ -52,6 +52,10 @@ remote = origin
 15. `docs/status/2026-05-24-persistent-ble-session-refactor-implementation.md`
     for the compile-validated implementation checkpoint and hardware test
     caveats
+16. `docs/status/2026-05-24-c3-persistent-ble-refactor-rollout-and-rollback.md`
+    for the real `ESP32-C3` refactor outcome, recommended firmware, and exact
+    rollback procedure to both the last good refactor stage and the exact
+    pre-refactor checkpoint
 
 ## Current Baseline
 
@@ -109,10 +113,12 @@ remote = origin
   - the older `ESP32-S3` board with MAC `3c:dc:75:63:47:5c` was erased only
   - it is blank now and does not have firmware on it unless reflashed later
 - Persistent BLE session caveat:
-  - the firmware now compiles with a shared BLE session and cached telemetry
-    scheduler
-  - this still needs a real flash test before claiming stable `1-2s`
-    telemetry on either `ESP32-S3` or `ESP32-C3`
+  - compile-only uncertainty is no longer the current state for `ESP32-C3`
+  - real hardware testing on the `ESP32-C3` board concluded with
+    `9f52f5d` / `esp32-c3-4mb-debug-cmdtask-fastbulk-task` as the current
+    recommended runtime
+  - exact rollback instructions are recorded in
+    `docs/status/2026-05-24-c3-persistent-ble-refactor-rollout-and-rollback.md`
 
 ## Operational Rule
 
