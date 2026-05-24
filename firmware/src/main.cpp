@@ -113,6 +113,7 @@ static const unsigned long HEARTBEAT_INTERVAL_MS = 300000;
 static const unsigned long AUTO_DISCOVERY_RETRY_MS = 60000;
 static const unsigned long COMMAND_POLL_INTERVAL_MS = 5000;
 static const unsigned long TELEMETRY_UPLOAD_RETRY_BACKOFF_MS = 2000;
+static const uint32_t HTTP_BUSY_SKIP_TIMEOUT_MS = 25;
 static const unsigned long WRITE_PAIRING_CODE_TTL_MS = 600000;
 static const unsigned long MAIN_FULL_REFRESH_INTERVAL_MS = LUMENTREE_MAIN_FULL_REFRESH_INTERVAL_MS;
 static const unsigned long SETTINGS_UPLOAD_INTERVAL_MS = LUMENTREE_SETTINGS_POLL_INTERVAL_MS;
@@ -1798,10 +1799,9 @@ static bool postTelemetry(
   String body;
   serializeJson(doc, body);
 
-  if (!lockHttpOperation(10000)) {
+  if (!lockHttpOperation(HTTP_BUSY_SKIP_TIMEOUT_MS)) {
     setRuntimeProbeHttpStatus(PROBE_TELEMETRY_UPLOAD, -2);
-    finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
-    emitError("http_busy", "HTTP lane is busy");
+    finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, true);
     return false;
   }
 
@@ -3132,9 +3132,9 @@ static void pollPendingCommand() {
   endpoint += "/commands/next?device_id=";
   endpoint += deviceId;
 
-  if (!lockHttpOperation(10000)) {
+  if (!lockHttpOperation(HTTP_BUSY_SKIP_TIMEOUT_MS)) {
     setRuntimeProbeHttpStatus(PROBE_COMMAND_POLL, -2);
-    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
     return;
   }
 
