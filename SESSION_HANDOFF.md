@@ -37,6 +37,8 @@ remote = origin
    implementation result, validation, and rollout caveats
 9. `docs/status/2026-05-23-battery-card-and-billing-cycle-refactor.md` for the
    Solar dashboard battery-source cleanup and EVN billing-cycle sensors
+10. `docs/status/2026-05-24-esp32-c3-experimental-first-boot.md` for the first
+    real `ESP32-C3 4MB` experimental build/flash/boot evidence
 
 ## Current Baseline
 
