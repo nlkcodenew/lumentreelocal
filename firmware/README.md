@@ -54,6 +54,19 @@ Important:
 - `ESP32-C3`
 - `classic ESP32 4MB`
 
+### Experimental build target now present in codebase
+
+- `esp32-s3-4mb-nopsram-experimental`
+
+What this means:
+
+- the codebase now contains a dedicated `PlatformIO` target and a custom
+  `4MB` single-app partition layout
+- this target is for developer testing only
+- it is **not** part of the stable flash site choices yet
+- it is **not** considered supported hardware yet
+- real hardware validation is still required before exposing it to users
+
 Only after:
 
 - a separate PlatformIO target,
