@@ -236,6 +236,7 @@ struct RuntimeProbe {
   uint32_t calls = 0;
   uint32_t slowCalls = 0;
   uint32_t failures = 0;
+  int32_t lastHttpStatus = 0;
   uint32_t lastDurationMs = 0;
   uint32_t maxDurationMs = 0;
   uint32_t lastStartMs = 0;
@@ -395,6 +396,7 @@ static void addRuntimeProbeJson(JsonArray array) {
     item["calls"] = probe.calls;
     item["slow_calls"] = probe.slowCalls;
     item["failures"] = probe.failures;
+    item["last_http_status"] = probe.lastHttpStatus;
     item["last_duration_ms"] = probe.lastDurationMs;
     item["max_duration_ms"] = probe.maxDurationMs;
     item["last_start_ms"] = probe.lastStartMs;
@@ -419,6 +421,12 @@ static void addRuntimeTraceJson(JsonArray array) {
     item["duration_ms"] = entry.durationMs;
     item["ok"] = entry.ok;
   }
+  portEXIT_CRITICAL(&runtimeProbeMux);
+}
+
+static void setRuntimeProbeHttpStatus(RuntimeProbeId id, int32_t httpStatus) {
+  portENTER_CRITICAL(&runtimeProbeMux);
+  runtimeProbes[id].lastHttpStatus = httpStatus;
   portEXIT_CRITICAL(&runtimeProbeMux);
 }
 
@@ -1577,6 +1585,7 @@ static bool postTelemetry(
     beginOk = http.begin(plainClient, endpoint);
   }
   if (!beginOk) {
+    setRuntimeProbeHttpStatus(PROBE_TELEMETRY_UPLOAD, -1);
     finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
     emitError("http_begin_failed", "could not initialize HTTP client");
     return false;
@@ -1588,6 +1597,7 @@ static bool postTelemetry(
   http.addHeader("User-Agent", String(FW_NAME) + "/" + FW_VERSION);
 
   int status = http.POST((uint8_t*)body.c_str(), body.length());
+  setRuntimeProbeHttpStatus(PROBE_TELEMETRY_UPLOAD, status);
   String response = http.getString();
   http.end();
 
@@ -2870,6 +2880,7 @@ static void pollPendingCommand() {
     beginOk = http.begin(plainClient, endpoint);
   }
   if (!beginOk) {
+    setRuntimeProbeHttpStatus(PROBE_COMMAND_POLL, -1);
     finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
     return;
   }
@@ -2879,6 +2890,7 @@ static void pollPendingCommand() {
   http.addHeader("User-Agent", String(FW_NAME) + "/" + FW_VERSION);
 
   int httpStatus = http.GET();
+  setRuntimeProbeHttpStatus(PROBE_COMMAND_POLL, httpStatus);
   String response = http.getString();
   http.end();
 
