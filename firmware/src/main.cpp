@@ -53,6 +53,12 @@
 #ifndef LUMENTREE_DEFAULT_TLS_INSECURE
 #define LUMENTREE_DEFAULT_TLS_INSECURE 1
 #endif
+#ifndef LUMENTREE_DISABLE_BACKGROUND_TELEMETRY
+#define LUMENTREE_DISABLE_BACKGROUND_TELEMETRY 0
+#endif
+#ifndef LUMENTREE_DISABLE_TELEMETRY_UPLOADS
+#define LUMENTREE_DISABLE_TELEMETRY_UPLOADS 0
+#endif
 
 #ifndef LUMENTREE_FIRMWARE_NAME
 #define LUMENTREE_FIRMWARE_NAME "lumentree-ble-bridge"
@@ -107,6 +113,8 @@ static bool activeScan = false;
 static bool candidateOnly = false;
 static bool productionEnabled = LUMENTREE_DEFAULT_PRODUCTION_ENABLED != 0;
 static bool tlsInsecure = LUMENTREE_DEFAULT_TLS_INSECURE != 0;
+static bool backgroundTelemetryDisabled = LUMENTREE_DISABLE_BACKGROUND_TELEMETRY != 0;
+static bool telemetryUploadsDisabled = LUMENTREE_DISABLE_TELEMETRY_UPLOADS != 0;
 static bool provisioningPortalActive = false;
 static bool portalServerStarted = false;
 static bool mdnsStarted = false;
@@ -206,6 +214,7 @@ static String defaultGatewayId();
 static String defaultLocalHostname();
 static String localPortalUrl();
 static void ensureMdnsStarted();
+static void handleProvisioningPortal();
 static void pollPendingCommand();
 static bool retryPendingCommandResult();
 static ModbusReadResult runModbusRead(uint16_t startRegister, uint16_t registerCount, const char* label);
@@ -216,6 +225,7 @@ static void invalidateModbusSession(const char* reason);
 static bool runModbusRequest(const String& commandHex, const char* label, const char* startEventType, const char* requestSafety, const char* responseSafety, ModbusReadResult& result);
 static void updateTelemetrySnapshot(TelemetrySnapshot& snapshot, const ModbusReadResult& result, uint16_t startRegister, uint16_t registerCount, const char* label, const char* safety);
 static bool flushTelemetrySnapshot(TelemetrySnapshot& snapshot);
+static bool flushOneDirtyTelemetrySnapshot();
 static void flushDirtyTelemetrySnapshots();
 static void maybeRunTelemetryScheduler();
 static bool readRegisterFromResult(const ModbusReadResult& result, uint16_t startRegister, uint16_t registerAddress, uint16_t& value);
@@ -284,6 +294,7 @@ static void updateTelemetrySnapshot(
 
 static bool flushTelemetrySnapshot(TelemetrySnapshot& snapshot) {
   if (!snapshot.valid || !snapshot.dirty) return true;
+  if (telemetryUploadsDisabled) return true;
   bool ok = postTelemetry(
     snapshot.payloadHex,
     snapshot.notifyCount,
@@ -297,6 +308,19 @@ static bool flushTelemetrySnapshot(TelemetrySnapshot& snapshot) {
     snapshot.dirty = false;
   }
   return ok;
+}
+
+static bool flushOneDirtyTelemetrySnapshot() {
+  if (latestMainTelemetry.valid && latestMainTelemetry.dirty) {
+    return flushTelemetrySnapshot(latestMainTelemetry);
+  }
+  if (latestSettingsTelemetry.valid && latestSettingsTelemetry.dirty) {
+    return flushTelemetrySnapshot(latestSettingsTelemetry);
+  }
+  if (latestStatsTelemetry.valid && latestStatsTelemetry.dirty) {
+    return flushTelemetrySnapshot(latestStatsTelemetry);
+  }
+  return false;
 }
 
 static void flushDirtyTelemetrySnapshots() {
@@ -444,6 +468,7 @@ static bool runModbusRequest(
   unsigned long deadline = millis() + 5000;
   while (millis() < deadline) {
     feedWatchdog();
+    handleProvisioningPortal();
     delay(50);
     if (modbusNotifyReceived && millis() - modbusLastNotifyMs > 600) break;
   }
@@ -693,6 +718,8 @@ static void emitConfig(const char* type) {
   doc["candidate_count"] = bleCandidates.size();
   doc["upload_interval_seconds"] = uploadIntervalSeconds;
   doc["tls_insecure"] = tlsInsecure;
+  doc["background_telemetry_disabled"] = backgroundTelemetryDisabled;
+  doc["telemetry_uploads_disabled"] = telemetryUploadsDisabled;
   doc["provisioning_portal_active"] = provisioningPortalActive;
   doc["provisioning_ap_ssid"] = provisioningApSsid;
   doc["read_pairing_token_active"] = readPairingTokenExpiresInSeconds() > 0;
@@ -732,6 +759,8 @@ static void emitStatus(const char* type) {
   doc["gateway_id"] = gatewayId;
   doc["upload_interval_seconds"] = uploadIntervalSeconds;
   doc["production_enabled"] = productionEnabled;
+  doc["background_telemetry_disabled"] = backgroundTelemetryDisabled;
+  doc["telemetry_uploads_disabled"] = telemetryUploadsDisabled;
   doc["provisioning_portal_active"] = provisioningPortalActive;
   doc["provisioning_ap_ssid"] = provisioningApSsid;
   doc["read_pairing_token_active"] = readPairingTokenExpiresInSeconds() > 0;
@@ -945,6 +974,8 @@ static void setupProvisioningWebServer() {
     addCandidatesJson(candidates);
     doc["upload_interval_seconds"] = uploadIntervalSeconds;
     doc["production_enabled"] = productionEnabled;
+    doc["background_telemetry_disabled"] = backgroundTelemetryDisabled;
+    doc["telemetry_uploads_disabled"] = telemetryUploadsDisabled;
     String body;
     serializeJson(doc, body);
     server.send(200, "application/json", body);
@@ -3570,26 +3601,27 @@ static void runWifiScan() {
 
 static void maybeRunTelemetryScheduler() {
   if (!productionEnabled) return;
+  if (backgroundTelemetryDisabled) return;
   if (pendingCommandResultId != 0) return;
   unsigned long now = millis();
   if (nextUploadMs == 0) {
     nextUploadMs = now + 2000;
   }
   if (nextSettingsPollMs == 0) {
-    nextSettingsPollMs = now + 5000;
+    nextSettingsPollMs = now + SETTINGS_UPLOAD_INTERVAL_MS;
   }
   if (nextStatsPollMs == 0) {
-    nextStatsPollMs = now + 8000;
+    nextStatsPollMs = now + STATS_UPLOAD_INTERVAL_MS;
   }
   if (targetMac.length() == 0 && lastAutoDiscoveryMs != 0 && now - lastAutoDiscoveryMs < AUTO_DISCOVERY_RETRY_MS) {
-    flushDirtyTelemetrySnapshots();
+    flushOneDirtyTelemetrySnapshot();
     return;
   }
   if (targetMac.length() == 0) {
     lastAutoDiscoveryMs = now;
     if (!runBleDiscovery(true)) {
       emitError("target_not_paired", "waiting for ESP32 gateway pairing");
-      flushDirtyTelemetrySnapshots();
+      flushOneDirtyTelemetrySnapshot();
       return;
     }
   }
@@ -3610,6 +3642,7 @@ static void maybeRunTelemetryScheduler() {
       markTelemetrySnapshotDirty(latestMainTelemetry);
     }
     nextUploadMs = millis() + telemetryIntervalMs();
+    return;
   }
 
   now = millis();
@@ -3630,6 +3663,7 @@ static void maybeRunTelemetryScheduler() {
       markTelemetrySnapshotDirty(latestSettingsTelemetry);
     }
     nextSettingsPollMs = millis() + SETTINGS_UPLOAD_INTERVAL_MS;
+    return;
   }
 
   now = millis();
@@ -3650,9 +3684,10 @@ static void maybeRunTelemetryScheduler() {
       markTelemetrySnapshotDirty(latestStatsTelemetry);
     }
     nextStatsPollMs = millis() + STATS_UPLOAD_INTERVAL_MS;
+    return;
   }
 
-  flushDirtyTelemetrySnapshots();
+  flushOneDirtyTelemetrySnapshot();
 }
 
 static void maybeEmitHeartbeat() {
@@ -3776,6 +3811,14 @@ static void handleCommand(String line) {
     prefs.putBool("prod", productionEnabled);
     nextUploadMs = 0;
     emitAck("SET_PRODUCTION");
+  } else if (line.startsWith("SET_BACKGROUND_TELEMETRY ")) {
+    int value = line.substring(25).toInt();
+    backgroundTelemetryDisabled = value == 0 ? false : true;
+    emitAck("SET_BACKGROUND_TELEMETRY");
+  } else if (line.startsWith("SET_TELEMETRY_UPLOADS ")) {
+    int value = line.substring(22).toInt();
+    telemetryUploadsDisabled = value == 0 ? false : true;
+    emitAck("SET_TELEMETRY_UPLOADS");
   } else if (line == "START_AP") {
     if (!provisioningPortalActive) {
       startProvisioningPortal(WiFi.status() == WL_CONNECTED);
