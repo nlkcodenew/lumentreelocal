@@ -100,6 +100,7 @@ static const uint32_t WATCHDOG_TIMEOUT_SECONDS = 60;
 static const unsigned long HEARTBEAT_INTERVAL_MS = 300000;
 static const unsigned long AUTO_DISCOVERY_RETRY_MS = 60000;
 static const unsigned long COMMAND_POLL_INTERVAL_MS = 5000;
+static const unsigned long TELEMETRY_UPLOAD_RETRY_BACKOFF_MS = 2000;
 static const unsigned long WRITE_PAIRING_CODE_TTL_MS = 600000;
 static const unsigned long SETTINGS_UPLOAD_INTERVAL_MS = 60000;
 static const unsigned long STATS_UPLOAD_INTERVAL_MS = 5UL * 60UL * 1000UL;
@@ -156,6 +157,7 @@ static unsigned long lastGatewayStatusPostMs = 0;
 static unsigned long lastCommandPollMs = 0;
 static unsigned long lastSettingsUploadMs = 0;
 static unsigned long lastStatsUploadMs = 0;
+static unsigned long nextDirtyTelemetryFlushRetryMs = 0;
 static uint16_t nextMainTelemetryStartRegister = 0;
 static volatile bool modbusNotifyReceived = false;
 static volatile unsigned long modbusLastNotifyMs = 0;
@@ -498,6 +500,7 @@ static void updateTelemetrySnapshot(
   snapshot.label = label != nullptr ? label : "";
   snapshot.safety = safety != nullptr ? safety : "";
   snapshot.observedMs = millis();
+  nextDirtyTelemetryFlushRetryMs = 0;
 }
 
 static bool flushTelemetrySnapshot(TelemetrySnapshot& snapshot) {
@@ -514,6 +517,9 @@ static bool flushTelemetrySnapshot(TelemetrySnapshot& snapshot) {
   );
   if (ok) {
     snapshot.dirty = false;
+    nextDirtyTelemetryFlushRetryMs = 0;
+  } else {
+    nextDirtyTelemetryFlushRetryMs = millis() + TELEMETRY_UPLOAD_RETRY_BACKOFF_MS;
   }
   return ok;
 }
@@ -4018,7 +4024,10 @@ static void maybeRunTelemetryScheduler() {
     return;
   }
 
-  flushOneDirtyTelemetrySnapshot();
+  now = millis();
+  if (nextDirtyTelemetryFlushRetryMs == 0 || (long)(now - nextDirtyTelemetryFlushRetryMs) >= 0) {
+    flushOneDirtyTelemetrySnapshot();
+  }
   finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
 }
 
