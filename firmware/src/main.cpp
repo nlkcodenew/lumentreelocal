@@ -68,6 +68,18 @@
 #ifndef LUMENTREE_MAIN_TELEMETRY_CHUNK_REGISTERS
 #define LUMENTREE_MAIN_TELEMETRY_CHUNK_REGISTERS 95
 #endif
+#ifndef LUMENTREE_USE_FAST_MAIN_CACHE
+#define LUMENTREE_USE_FAST_MAIN_CACHE 0
+#endif
+#ifndef LUMENTREE_MAIN_FULL_REFRESH_INTERVAL_MS
+#define LUMENTREE_MAIN_FULL_REFRESH_INTERVAL_MS 60000UL
+#endif
+#ifndef LUMENTREE_SETTINGS_POLL_INTERVAL_MS
+#define LUMENTREE_SETTINGS_POLL_INTERVAL_MS 60000UL
+#endif
+#ifndef LUMENTREE_STATS_POLL_INTERVAL_MS
+#define LUMENTREE_STATS_POLL_INTERVAL_MS (5UL * 60UL * 1000UL)
+#endif
 #ifndef LUMENTREE_DISABLE_COMMAND_POLLING
 #define LUMENTREE_DISABLE_COMMAND_POLLING 0
 #endif
@@ -102,11 +114,13 @@ static const unsigned long AUTO_DISCOVERY_RETRY_MS = 60000;
 static const unsigned long COMMAND_POLL_INTERVAL_MS = 5000;
 static const unsigned long TELEMETRY_UPLOAD_RETRY_BACKOFF_MS = 2000;
 static const unsigned long WRITE_PAIRING_CODE_TTL_MS = 600000;
-static const unsigned long SETTINGS_UPLOAD_INTERVAL_MS = 60000;
-static const unsigned long STATS_UPLOAD_INTERVAL_MS = 5UL * 60UL * 1000UL;
+static const unsigned long MAIN_FULL_REFRESH_INTERVAL_MS = LUMENTREE_MAIN_FULL_REFRESH_INTERVAL_MS;
+static const unsigned long SETTINGS_UPLOAD_INTERVAL_MS = LUMENTREE_SETTINGS_POLL_INTERVAL_MS;
+static const unsigned long STATS_UPLOAD_INTERVAL_MS = LUMENTREE_STATS_POLL_INTERVAL_MS;
 static const uint16_t SCHEDULE_STATE_START_REGISTER = 130;
 static const uint16_t SCHEDULE_STATE_REGISTER_COUNT = 47;
 static const uint16_t MAIN_TELEMETRY_TOTAL_REGISTERS = 95;
+static const uint16_t MAIN_TELEMETRY_RESPONSE_DATA_BYTES = MAIN_TELEMETRY_TOTAL_REGISTERS * 2;
 static const uint8_t RUNTIME_PROBE_COUNT = 7;
 static const uint8_t RUNTIME_TRACE_SIZE = 16;
 
@@ -158,6 +172,7 @@ static unsigned long lastCommandPollMs = 0;
 static unsigned long lastSettingsUploadMs = 0;
 static unsigned long lastStatsUploadMs = 0;
 static unsigned long nextDirtyTelemetryFlushRetryMs = 0;
+static unsigned long nextMainFullRefreshMs = 0;
 static uint16_t nextMainTelemetryStartRegister = 0;
 static volatile bool modbusNotifyReceived = false;
 static volatile unsigned long modbusLastNotifyMs = 0;
@@ -175,6 +190,7 @@ static String pendingCommandResultStatus;
 static String pendingCommandResultError;
 static String pendingCommandResultPayload;
 static SemaphoreHandle_t modbusOperationMutex = nullptr;
+static SemaphoreHandle_t httpOperationMutex = nullptr;
 static TaskHandle_t telemetryTaskHandle = nullptr;
 static TaskHandle_t commandPollTaskHandle = nullptr;
 static portMUX_TYPE runtimeProbeMux = portMUX_INITIALIZER_UNLOCKED;
@@ -207,6 +223,24 @@ struct TelemetrySnapshot {
   String label;
   String safety;
   unsigned long observedMs = 0;
+};
+
+struct MainTelemetryCache {
+  bool valid = false;
+  bool registersValid[MAIN_TELEMETRY_TOTAL_REGISTERS] = {};
+  uint8_t data[MAIN_TELEMETRY_RESPONSE_DATA_BYTES] = {};
+  uint16_t validCount = 0;
+  unsigned long updatedMs = 0;
+  unsigned long fullRefreshMs = 0;
+};
+
+struct MainTelemetryReadRange {
+  uint16_t startRegister = 0;
+  uint16_t registerCount = 0;
+  const char* label = "";
+
+  MainTelemetryReadRange(uint16_t start, uint16_t count, const char* rangeLabel)
+    : startRegister(start), registerCount(count), label(rangeLabel) {}
 };
 
 struct BleCandidate {
@@ -265,6 +299,8 @@ static String pairingStatus = "unconfigured";
 static TelemetrySnapshot latestMainTelemetry;
 static TelemetrySnapshot latestSettingsTelemetry;
 static TelemetrySnapshot latestStatsTelemetry;
+static MainTelemetryCache mainTelemetryCache;
+static uint8_t nextFastMainRangeIndex = 0;
 static RuntimeProbe runtimeProbes[RUNTIME_PROBE_COUNT] = {
   makeRuntimeProbe("loop", 100),
   makeRuntimeProbe("portal", 50),
@@ -277,6 +313,10 @@ static RuntimeProbe runtimeProbes[RUNTIME_PROBE_COUNT] = {
 static RuntimeTraceEntry runtimeTrace[RUNTIME_TRACE_SIZE];
 static uint8_t runtimeTraceNextIndex = 0;
 static bool runtimeTraceWrapped = false;
+static const MainTelemetryReadRange FAST_MAIN_TELEMETRY_RANGES[] = {
+  {11, 14, "fast_main_registers_11_24"},
+  {50, 25, "fast_main_registers_50_74"},
+};
 
 static void addCandidatesJson(JsonArray array);
 static void addRuntimeProbeJson(JsonArray array);
@@ -305,6 +345,8 @@ static void invalidateModbusSession(const char* reason);
 static bool runModbusRequest(const String& commandHex, const char* label, const char* startEventType, const char* requestSafety, const char* responseSafety, ModbusReadResult& result);
 static bool lockModbusOperation(uint32_t timeoutMs);
 static void unlockModbusOperation();
+static bool lockHttpOperation(uint32_t timeoutMs);
+static void unlockHttpOperation();
 static void telemetryTaskLoop(void* parameter);
 static void commandPollTaskLoop(void* parameter);
 static uint16_t mainTelemetryChunkRegisterCount();
@@ -317,6 +359,11 @@ static bool flushTelemetrySnapshot(TelemetrySnapshot& snapshot);
 static bool flushOneDirtyTelemetrySnapshot();
 static void flushDirtyTelemetrySnapshots();
 static void maybeRunTelemetryScheduler();
+static bool runFastMainCacheScheduler(unsigned long now);
+static bool mergeMainTelemetryCache(const ModbusReadResult& result, uint16_t startRegister, uint16_t registerCount, bool fullRefresh);
+static bool updateMainTelemetrySnapshotFromCache(const char* safety);
+static String buildMainTelemetryCachePayloadHex();
+static bool extractModbusResponseBytes(const String& payloadHex, uint8_t functionCode, std::string& responseBytes);
 static bool readRegisterFromResult(const ModbusReadResult& result, uint16_t startRegister, uint16_t registerAddress, uint16_t& value);
 static bool loadScheduleState(ScheduleState& state, String& errorMessage);
 static bool validateScheduleConflicts(const ScheduleState& state, String& errorMessage);
@@ -346,6 +393,19 @@ static bool lockModbusOperation(uint32_t timeoutMs) {
 static void unlockModbusOperation() {
   if (modbusOperationMutex != nullptr) {
     xSemaphoreGive(modbusOperationMutex);
+  }
+}
+
+static bool lockHttpOperation(uint32_t timeoutMs) {
+  if (httpOperationMutex == nullptr) {
+    return true;
+  }
+  return xSemaphoreTake(httpOperationMutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
+}
+
+static void unlockHttpOperation() {
+  if (httpOperationMutex != nullptr) {
+    xSemaphoreGive(httpOperationMutex);
   }
 }
 
@@ -897,6 +957,151 @@ static String buildWriteMultipleRegistersAck(uint8_t slaveId, uint16_t registerA
   return bytesToHex(frame, sizeof(frame));
 }
 
+static bool extractModbusResponseBytes(const String& payloadHex, uint8_t functionCode, std::string& responseBytes) {
+  responseBytes.clear();
+  String normalized = payloadHex;
+  normalized.trim();
+  normalized.toLowerCase();
+  if (normalized.length() == 0) return false;
+
+  const char* prefix = functionCode == 0x04 ? "0104" : "0103";
+  int separatorIndex = normalized.indexOf("2b2b2b2b");
+  if (separatorIndex >= 0) {
+    normalized = normalized.substring(separatorIndex + 8);
+  }
+  int prefixIndex = normalized.indexOf(prefix);
+  if (prefixIndex > 0) {
+    normalized = normalized.substring(prefixIndex);
+  }
+  if (!normalized.startsWith(prefix)) return false;
+  return hexToBytes(normalized, responseBytes);
+}
+
+static bool mergeMainTelemetryCache(
+  const ModbusReadResult& result,
+  uint16_t startRegister,
+  uint16_t registerCount,
+  bool fullRefresh
+) {
+  if (!result.ok || registerCount == 0 || startRegister >= MAIN_TELEMETRY_TOTAL_REGISTERS) {
+    return false;
+  }
+  if ((uint32_t)startRegister + registerCount > MAIN_TELEMETRY_TOTAL_REGISTERS) {
+    return false;
+  }
+
+  std::string responseBytes;
+  if (!extractModbusResponseBytes(result.payloadHex, 0x03, responseBytes)) {
+    return false;
+  }
+  if (responseBytes.length() < 5) {
+    return false;
+  }
+  const uint8_t* response = (const uint8_t*)responseBytes.data();
+  if (response[0] != 0x01 || response[1] != 0x03) {
+    return false;
+  }
+  uint16_t byteCount = response[2];
+  uint16_t expectedBytes = registerCount * 2;
+  if (byteCount < expectedBytes || responseBytes.length() < (size_t)(3 + expectedBytes + 2)) {
+    return false;
+  }
+
+  size_t sourceOffset = 3;
+  size_t targetOffset = (size_t)startRegister * 2;
+  memcpy(mainTelemetryCache.data + targetOffset, response + sourceOffset, expectedBytes);
+  for (uint16_t index = 0; index < registerCount; index++) {
+    uint16_t registerIndex = startRegister + index;
+    if (!mainTelemetryCache.registersValid[registerIndex]) {
+      mainTelemetryCache.registersValid[registerIndex] = true;
+      mainTelemetryCache.validCount++;
+    }
+  }
+  mainTelemetryCache.valid = mainTelemetryCache.validCount == MAIN_TELEMETRY_TOTAL_REGISTERS;
+  mainTelemetryCache.updatedMs = millis();
+  if (fullRefresh && mainTelemetryCache.valid) {
+    mainTelemetryCache.fullRefreshMs = mainTelemetryCache.updatedMs;
+  }
+  return mainTelemetryCache.valid;
+}
+
+static String buildMainTelemetryCachePayloadHex() {
+  if (!mainTelemetryCache.valid) return "";
+  uint8_t frame[3 + MAIN_TELEMETRY_RESPONSE_DATA_BYTES + 2] = {};
+  frame[0] = 0x01;
+  frame[1] = 0x03;
+  frame[2] = (uint8_t)MAIN_TELEMETRY_RESPONSE_DATA_BYTES;
+  memcpy(frame + 3, mainTelemetryCache.data, MAIN_TELEMETRY_RESPONSE_DATA_BYTES);
+  uint16_t crc = crc16Modbus(frame, 3 + MAIN_TELEMETRY_RESPONSE_DATA_BYTES);
+  frame[3 + MAIN_TELEMETRY_RESPONSE_DATA_BYTES] = (uint8_t)(crc & 0xFF);
+  frame[3 + MAIN_TELEMETRY_RESPONSE_DATA_BYTES + 1] = (uint8_t)((crc >> 8) & 0xFF);
+  return bytesToHex(frame, sizeof(frame));
+}
+
+static bool updateMainTelemetrySnapshotFromCache(const char* safety) {
+  String payloadHex = buildMainTelemetryCachePayloadHex();
+  if (payloadHex.length() == 0) return false;
+
+  ModbusReadResult cached;
+  cached.ok = true;
+  cached.payloadHex = payloadHex;
+  cached.length = 3 + MAIN_TELEMETRY_RESPONSE_DATA_BYTES + 2;
+  cached.notifyCount = 0;
+  updateTelemetrySnapshot(
+    latestMainTelemetry,
+    cached,
+    0,
+    MAIN_TELEMETRY_TOTAL_REGISTERS,
+    "main_registers_0_94",
+    safety
+  );
+  return true;
+}
+
+static bool runFastMainCacheScheduler(unsigned long now) {
+  bool fullRefreshDue = !mainTelemetryCache.valid
+    || nextMainFullRefreshMs == 0
+    || (long)(now - nextMainFullRefreshMs) >= 0;
+
+  if (fullRefreshDue) {
+    ModbusReadResult result = runModbusRead(0, MAIN_TELEMETRY_TOTAL_REGISTERS, "main_registers_0_94_full_refresh");
+    bool ok = mergeMainTelemetryCache(result, 0, MAIN_TELEMETRY_TOTAL_REGISTERS, true);
+    if (ok) {
+      updateMainTelemetrySnapshotFromCache("function_03_read_only_full_cache_refresh");
+      nextMainFullRefreshMs = millis() + MAIN_FULL_REFRESH_INTERVAL_MS;
+      nextUploadMs = millis() + telemetryIntervalMs();
+    } else {
+      emitError("main_cache_refresh_failed", "could not refresh full main telemetry cache");
+      nextMainFullRefreshMs = millis() + telemetryIntervalMs();
+      if (mainTelemetryCache.valid) {
+        markTelemetrySnapshotDirty(latestMainTelemetry);
+      }
+    }
+    return ok;
+  }
+
+  if ((long)(now - nextUploadMs) < 0) {
+    return true;
+  }
+
+  const size_t rangeCount = sizeof(FAST_MAIN_TELEMETRY_RANGES) / sizeof(FAST_MAIN_TELEMETRY_RANGES[0]);
+  const MainTelemetryReadRange& range = FAST_MAIN_TELEMETRY_RANGES[nextFastMainRangeIndex % rangeCount];
+  nextFastMainRangeIndex = (uint8_t)((nextFastMainRangeIndex + 1) % rangeCount);
+
+  ModbusReadResult result = runModbusRead(range.startRegister, range.registerCount, range.label);
+  bool ok = mergeMainTelemetryCache(result, range.startRegister, range.registerCount, false);
+  if (ok) {
+    updateMainTelemetrySnapshotFromCache("function_03_read_only_fast_cache_merge");
+  } else {
+    emitError("main_cache_fast_read_failed", "could not merge fast main telemetry range");
+    if (mainTelemetryCache.valid) {
+      markTelemetrySnapshotDirty(latestMainTelemetry);
+    }
+  }
+  nextUploadMs = millis() + telemetryIntervalMs();
+  return ok;
+}
+
 static void printJson(JsonDocument& doc) {
   serializeJson(doc, Serial0);
   Serial0.println();
@@ -957,6 +1162,11 @@ static void emitConfig(const char* type) {
   doc["telemetry_uploads_disabled"] = telemetryUploadsDisabled;
   doc["telemetry_task_enabled"] = telemetryTaskEnabled;
   doc["main_telemetry_chunk_registers"] = mainTelemetryChunkRegisterCount();
+  doc["fast_main_cache_enabled"] = LUMENTREE_USE_FAST_MAIN_CACHE != 0;
+  doc["main_telemetry_cache_valid"] = mainTelemetryCache.valid;
+  doc["main_telemetry_cache_valid_registers"] = mainTelemetryCache.validCount;
+  doc["main_full_refresh_interval_ms"] = MAIN_FULL_REFRESH_INTERVAL_MS;
+  doc["settings_poll_interval_ms"] = SETTINGS_UPLOAD_INTERVAL_MS;
   doc["command_polling_disabled"] = commandPollingDisabled;
   doc["command_poll_task_enabled"] = commandPollTaskEnabled;
   doc["provisioning_portal_active"] = provisioningPortalActive;
@@ -1002,6 +1212,11 @@ static void emitStatus(const char* type) {
   doc["telemetry_uploads_disabled"] = telemetryUploadsDisabled;
   doc["telemetry_task_enabled"] = telemetryTaskEnabled;
   doc["main_telemetry_chunk_registers"] = mainTelemetryChunkRegisterCount();
+  doc["fast_main_cache_enabled"] = LUMENTREE_USE_FAST_MAIN_CACHE != 0;
+  doc["main_telemetry_cache_valid"] = mainTelemetryCache.valid;
+  doc["main_telemetry_cache_valid_registers"] = mainTelemetryCache.validCount;
+  doc["main_full_refresh_interval_ms"] = MAIN_FULL_REFRESH_INTERVAL_MS;
+  doc["settings_poll_interval_ms"] = SETTINGS_UPLOAD_INTERVAL_MS;
   doc["command_polling_disabled"] = commandPollingDisabled;
   doc["command_poll_task_enabled"] = commandPollTaskEnabled;
   doc["provisioning_portal_active"] = provisioningPortalActive;
@@ -1221,6 +1436,11 @@ static void setupProvisioningWebServer() {
     doc["telemetry_uploads_disabled"] = telemetryUploadsDisabled;
     doc["telemetry_task_enabled"] = telemetryTaskEnabled;
     doc["main_telemetry_chunk_registers"] = mainTelemetryChunkRegisterCount();
+    doc["fast_main_cache_enabled"] = LUMENTREE_USE_FAST_MAIN_CACHE != 0;
+    doc["main_telemetry_cache_valid"] = mainTelemetryCache.valid;
+    doc["main_telemetry_cache_valid_registers"] = mainTelemetryCache.validCount;
+    doc["main_full_refresh_interval_ms"] = MAIN_FULL_REFRESH_INTERVAL_MS;
+    doc["settings_poll_interval_ms"] = SETTINGS_UPLOAD_INTERVAL_MS;
     doc["command_polling_disabled"] = commandPollingDisabled;
     doc["command_poll_task_enabled"] = commandPollTaskEnabled;
     JsonArray runtimeProbesJson = doc["runtime_probes"].to<JsonArray>();
@@ -1578,6 +1798,13 @@ static bool postTelemetry(
   String body;
   serializeJson(doc, body);
 
+  if (!lockHttpOperation(10000)) {
+    setRuntimeProbeHttpStatus(PROBE_TELEMETRY_UPLOAD, -2);
+    finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
+    emitError("http_busy", "HTTP lane is busy");
+    return false;
+  }
+
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
   HTTPClient http;
@@ -1592,6 +1819,7 @@ static bool postTelemetry(
   }
   if (!beginOk) {
     setRuntimeProbeHttpStatus(PROBE_TELEMETRY_UPLOAD, -1);
+    unlockHttpOperation();
     finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
     emitError("http_begin_failed", "could not initialize HTTP client");
     return false;
@@ -1606,6 +1834,7 @@ static bool postTelemetry(
   setRuntimeProbeHttpStatus(PROBE_TELEMETRY_UPLOAD, status);
   String response = http.getString();
   http.end();
+  unlockHttpOperation();
 
   JsonDocument result;
   result["type"] = status >= 200 && status < 300 ? "api_upload_ok" : "api_upload_failed";
@@ -1692,6 +1921,8 @@ static bool postGatewayStatus(const char* reason) {
   String body;
   serializeJson(doc, body);
 
+  if (!lockHttpOperation(10000)) return false;
+
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
   HTTPClient http;
@@ -1704,7 +1935,10 @@ static bool postGatewayStatus(const char* reason) {
   } else {
     beginOk = http.begin(plainClient, endpoint);
   }
-  if (!beginOk) return false;
+  if (!beginOk) {
+    unlockHttpOperation();
+    return false;
+  }
 
   http.setTimeout(8000);
   http.addHeader("Content-Type", "application/json");
@@ -1714,6 +1948,7 @@ static bool postGatewayStatus(const char* reason) {
   int status = http.POST((uint8_t*)body.c_str(), body.length());
   String response = http.getString();
   http.end();
+  unlockHttpOperation();
 
   JsonDocument result;
   result["type"] = status >= 200 && status < 300 ? "gateway_status_upload_ok" : "gateway_status_upload_failed";
@@ -1757,6 +1992,8 @@ static bool postGatewayCandidates() {
   String body;
   serializeJson(doc, body);
 
+  if (!lockHttpOperation(10000)) return false;
+
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
   HTTPClient http;
@@ -1769,7 +2006,10 @@ static bool postGatewayCandidates() {
   } else {
     beginOk = http.begin(plainClient, endpoint);
   }
-  if (!beginOk) return false;
+  if (!beginOk) {
+    unlockHttpOperation();
+    return false;
+  }
 
   http.setTimeout(8000);
   http.addHeader("Content-Type", "application/json");
@@ -1779,6 +2019,7 @@ static bool postGatewayCandidates() {
   int status = http.POST((uint8_t*)body.c_str(), body.length());
   String response = http.getString();
   http.end();
+  unlockHttpOperation();
 
   JsonDocument result;
   result["type"] = status >= 200 && status < 300 ? "gateway_candidates_upload_ok" : "gateway_candidates_upload_failed";
@@ -1814,6 +2055,8 @@ static bool postReadPairingToken(const String& token, String& response) {
   String body;
   serializeJson(doc, body);
 
+  if (!lockHttpOperation(10000)) return false;
+
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
   HTTPClient http;
@@ -1826,7 +2069,10 @@ static bool postReadPairingToken(const String& token, String& response) {
   } else {
     beginOk = http.begin(plainClient, endpoint);
   }
-  if (!beginOk) return false;
+  if (!beginOk) {
+    unlockHttpOperation();
+    return false;
+  }
 
   http.setTimeout(8000);
   http.addHeader("Content-Type", "application/json");
@@ -1836,6 +2082,7 @@ static bool postReadPairingToken(const String& token, String& response) {
   int httpStatus = http.POST((uint8_t*)body.c_str(), body.length());
   response = http.getString();
   http.end();
+  unlockHttpOperation();
 
   JsonDocument log;
   log["type"] = httpStatus >= 200 && httpStatus < 300 ? "read_pairing_token_registered" : "read_pairing_token_failed";
@@ -1871,6 +2118,8 @@ static bool postWritePairingCode(const String& code, String& response) {
   String body;
   serializeJson(doc, body);
 
+  if (!lockHttpOperation(10000)) return false;
+
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
   HTTPClient http;
@@ -1883,7 +2132,10 @@ static bool postWritePairingCode(const String& code, String& response) {
   } else {
     beginOk = http.begin(plainClient, endpoint);
   }
-  if (!beginOk) return false;
+  if (!beginOk) {
+    unlockHttpOperation();
+    return false;
+  }
 
   http.setTimeout(8000);
   http.addHeader("Content-Type", "application/json");
@@ -1893,6 +2145,7 @@ static bool postWritePairingCode(const String& code, String& response) {
   int httpStatus = http.POST((uint8_t*)body.c_str(), body.length());
   response = http.getString();
   http.end();
+  unlockHttpOperation();
 
   JsonDocument log;
   log["type"] = httpStatus >= 200 && httpStatus < 300 ? "write_pairing_code_registered" : "write_pairing_code_failed";
@@ -1929,6 +2182,8 @@ static bool postCommandResult(uint64_t commandId, const char* status, JsonDocume
   String body;
   serializeJson(doc, body);
 
+  if (!lockHttpOperation(10000)) return false;
+
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
   HTTPClient http;
@@ -1941,7 +2196,10 @@ static bool postCommandResult(uint64_t commandId, const char* status, JsonDocume
   } else {
     beginOk = http.begin(plainClient, endpoint);
   }
-  if (!beginOk) return false;
+  if (!beginOk) {
+    unlockHttpOperation();
+    return false;
+  }
 
   http.setTimeout(8000);
   http.addHeader("Content-Type", "application/json");
@@ -1951,6 +2209,7 @@ static bool postCommandResult(uint64_t commandId, const char* status, JsonDocume
   int httpStatus = http.POST((uint8_t*)body.c_str(), body.length());
   String response = http.getString();
   http.end();
+  unlockHttpOperation();
 
   JsonDocument log;
   log["type"] = httpStatus >= 200 && httpStatus < 300 ? "command_result_upload_ok" : "command_result_upload_failed";
@@ -2873,6 +3132,12 @@ static void pollPendingCommand() {
   endpoint += "/commands/next?device_id=";
   endpoint += deviceId;
 
+  if (!lockHttpOperation(10000)) {
+    setRuntimeProbeHttpStatus(PROBE_COMMAND_POLL, -2);
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
+    return;
+  }
+
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
   HTTPClient http;
@@ -2887,6 +3152,7 @@ static void pollPendingCommand() {
   }
   if (!beginOk) {
     setRuntimeProbeHttpStatus(PROBE_COMMAND_POLL, -1);
+    unlockHttpOperation();
     finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
     return;
   }
@@ -2899,6 +3165,7 @@ static void pollPendingCommand() {
   setRuntimeProbeHttpStatus(PROBE_COMMAND_POLL, httpStatus);
   String response = http.getString();
   http.end();
+  unlockHttpOperation();
 
   if (httpStatus < 200 || httpStatus >= 300) {
     JsonDocument log;
@@ -3952,6 +4219,18 @@ static void maybeRunTelemetryScheduler() {
     }
   }
 
+  if (LUMENTREE_USE_FAST_MAIN_CACHE != 0) {
+    bool mainDue = !mainTelemetryCache.valid
+      || nextMainFullRefreshMs == 0
+      || (long)(now - nextMainFullRefreshMs) >= 0
+      || (long)(now - nextUploadMs) >= 0;
+    if (mainDue) {
+      bool ok = runFastMainCacheScheduler(now);
+      finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, ok);
+      return;
+    }
+  }
+
   if ((long)(now - nextUploadMs) >= 0) {
     uint16_t startRegister = nextMainTelemetryStartRegister;
     uint16_t registerCount = mainTelemetryChunkLengthForStart(startRegister);
@@ -4243,6 +4522,7 @@ void setup() {
   esp_task_wdt_init(WATCHDOG_TIMEOUT_SECONDS, true);
   esp_task_wdt_add(nullptr);
   modbusOperationMutex = xSemaphoreCreateMutex();
+  httpOperationMutex = xSemaphoreCreateMutex();
 
   loadConfig();
   if (productionEnabled) {
