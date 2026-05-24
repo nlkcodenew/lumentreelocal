@@ -144,7 +144,7 @@ SET_API_URL https://lumentree.jonah.io.vn
 SET_API_TOKEN your-production-token
 SET_DEVICE_ID P240819130
 SET_GATEWAY_ID esp32-lumentree
-SET_UPLOAD_INTERVAL 10
+SET_UPLOAD_INTERVAL 2
 SET_TLS_INSECURE 1
 UPLOAD_ONCE
 SET_PRODUCTION 1
@@ -178,6 +178,14 @@ GENERATE_WRITE_CODE
 - Production API default: `https://lumentree.jonah.io.vn`
 - Firmware build flags in `platformio.ini` are the source of truth for the
   reported firmware name/version.
+- Normal production telemetry now prefers a persistent BLE session instead of a
+  reconnect-per-read loop.
+- `SET_UPLOAD_INTERVAL` is the main telemetry cadence control and now accepts
+  `1..3600` seconds.
+- Recommended rollout test sequence after flash:
+  - start at `SET_UPLOAD_INTERVAL 2`
+  - verify BLE stability and server freshness
+  - only then try `SET_UPLOAD_INTERVAL 1` if near-realtime behavior is needed
 
 ## Deeper References
 

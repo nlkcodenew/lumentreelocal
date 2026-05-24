@@ -45,6 +45,13 @@ remote = origin
 12. `docs/status/2026-05-24-session-wrapup-c3-runtime-and-s3-erase.md` for the
     end-of-session runtime summary: C3 live state, published flash-site
     outcome, and the fact that the older S3 board was erased without reflash
+13. `docs/plans/2026-05-24-persistent-ble-session-refactor-plan.md` for the
+    accepted direction away from reconnect-per-read BLE telemetry
+14. `docs/specs/2026-05-24-persistent-ble-session-and-adaptive-polling-spec.md`
+    for the intended runtime session/scheduler model
+15. `docs/status/2026-05-24-persistent-ble-session-refactor-implementation.md`
+    for the compile-validated implementation checkpoint and hardware test
+    caveats
 
 ## Current Baseline
 
@@ -101,6 +108,11 @@ remote = origin
 - Hardware test caveat after this session:
   - the older `ESP32-S3` board with MAC `3c:dc:75:63:47:5c` was erased only
   - it is blank now and does not have firmware on it unless reflashed later
+- Persistent BLE session caveat:
+  - the firmware now compiles with a shared BLE session and cached telemetry
+    scheduler
+  - this still needs a real flash test before claiming stable `1-2s`
+    telemetry on either `ESP32-S3` or `ESP32-C3`
 
 ## Operational Rule
 

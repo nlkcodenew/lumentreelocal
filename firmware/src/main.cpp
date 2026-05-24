@@ -71,7 +71,7 @@ static const uint8_t DEFAULT_SCAN_SECONDS = 2;
 static const uint16_t DEFAULT_SCAN_INTERVAL = 800;  // 500 ms in BLE units
 static const uint16_t DEFAULT_SCAN_WINDOW = 80;     // 50 ms in BLE units
 static const uint16_t DEFAULT_LOG_LIMIT = 80;
-static const uint16_t MIN_UPLOAD_INTERVAL_SECONDS = 5;
+static const uint16_t MIN_UPLOAD_INTERVAL_SECONDS = 1;
 static const uint16_t DEFAULT_UPLOAD_INTERVAL_SECONDS = LUMENTREE_DEFAULT_UPLOAD_INTERVAL_SECONDS;
 static const unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
 static const uint16_t PROVISIONING_DNS_PORT = 53;
@@ -116,8 +116,11 @@ static esp_ble_addr_type_t targetAddressType = BLE_ADDR_TYPE_PUBLIC;
 static bool targetAddressTypeKnown = false;
 static BLEClient* discoveryClient = nullptr;
 static BLEClient* modbusClient = nullptr;
+static BLERemoteCharacteristic* modbusCharacteristic = nullptr;
 static unsigned long bootMs = 0;
 static unsigned long nextUploadMs = 0;
+static unsigned long nextSettingsPollMs = 0;
+static unsigned long nextStatsPollMs = 0;
 static unsigned long lastHeartbeatMs = 0;
 static unsigned long lastAutoDiscoveryMs = 0;
 static unsigned long lastGatewayStatusPostMs = 0;
@@ -128,6 +131,9 @@ static volatile bool modbusNotifyReceived = false;
 static volatile unsigned long modbusLastNotifyMs = 0;
 static uint16_t modbusNotifyCount = 0;
 static std::string modbusResponseBytes;
+static bool modbusNotifyRegistered = false;
+static unsigned long modbusReconnectBackoffUntilMs = 0;
+static uint8_t modbusReconnectFailureCount = 0;
 static String writePairingCode;
 static unsigned long writePairingCodeExpiresMs = 0;
 static String readPairingToken;
@@ -142,6 +148,19 @@ struct ModbusReadResult {
   String payloadHex;
   size_t length = 0;
   uint16_t notifyCount = 0;
+};
+
+struct TelemetrySnapshot {
+  bool valid = false;
+  bool dirty = false;
+  String payloadHex;
+  size_t length = 0;
+  uint16_t notifyCount = 0;
+  uint16_t startRegister = 0;
+  uint16_t registerCount = 0;
+  String label;
+  String safety;
+  unsigned long observedMs = 0;
 };
 
 struct BleCandidate {
@@ -169,11 +188,15 @@ struct ScheduleState {
 
 static std::vector<BleCandidate> bleCandidates;
 static String pairingStatus = "unconfigured";
+static TelemetrySnapshot latestMainTelemetry;
+static TelemetrySnapshot latestSettingsTelemetry;
+static TelemetrySnapshot latestStatsTelemetry;
 
 static void addCandidatesJson(JsonArray array);
 static bool runBleDiscovery(bool allowAutoBind);
 static bool postGatewayCandidates();
 static bool postGatewayStatus(const char* reason);
+static bool postTelemetry(const String& payloadHex, uint16_t notifyCount, size_t payloadLength, uint16_t startRegister, uint16_t registerCount, const char* label, const char* safety);
 static bool postReadPairingToken(const String& token, String& response);
 static bool postWritePairingCode(const String& code, String& response);
 static bool uploadSettingsSnapshotNow(const char* reason);
@@ -187,6 +210,14 @@ static void pollPendingCommand();
 static bool retryPendingCommandResult();
 static ModbusReadResult runModbusRead(uint16_t startRegister, uint16_t registerCount, const char* label);
 static ModbusReadResult runModbusReadInput(uint16_t startRegister, uint16_t registerCount, const char* label);
+static bool ensureModbusSession();
+static void resetModbusSession(const char* reason);
+static void invalidateModbusSession(const char* reason);
+static bool runModbusRequest(const String& commandHex, const char* label, const char* startEventType, const char* requestSafety, const char* responseSafety, ModbusReadResult& result);
+static void updateTelemetrySnapshot(TelemetrySnapshot& snapshot, const ModbusReadResult& result, uint16_t startRegister, uint16_t registerCount, const char* label, const char* safety);
+static bool flushTelemetrySnapshot(TelemetrySnapshot& snapshot);
+static void flushDirtyTelemetrySnapshots();
+static void maybeRunTelemetryScheduler();
 static bool readRegisterFromResult(const ModbusReadResult& result, uint16_t startRegister, uint16_t registerAddress, uint16_t& value);
 static bool loadScheduleState(ScheduleState& state, String& errorMessage);
 static bool validateScheduleConflicts(const ScheduleState& state, String& errorMessage);
@@ -197,9 +228,266 @@ static void clearPendingCommandResult();
 static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result);
 static void maybeAccelerateAfterWriteCommand(const char* status, JsonDocument& result);
 static void modbusNotifyCallback(BLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify);
+static void printJson(JsonDocument& doc);
+static void emitError(const char* code, const char* message);
+static String bytesToHex(const std::string& data);
+static bool hexToBytes(const String& hex, std::string& out);
 
 static void feedWatchdog() {
   esp_task_wdt_reset();
+}
+
+static void emitBleSessionEvent(const char* type, const char* reason) {
+  JsonDocument doc;
+  doc["type"] = type;
+  doc["uptime_ms"] = millis() - bootMs;
+  doc["target_mac"] = targetMac;
+  if (reason != nullptr && strlen(reason) > 0) {
+    doc["reason"] = reason;
+  }
+  doc["connected"] = modbusClient != nullptr && modbusClient->isConnected();
+  doc["backoff_until_ms"] = modbusReconnectBackoffUntilMs;
+  doc["failure_count"] = modbusReconnectFailureCount;
+  printJson(doc);
+}
+
+static unsigned long telemetryIntervalMs() {
+  return (unsigned long)uploadIntervalSeconds * 1000UL;
+}
+
+static void markTelemetrySnapshotDirty(TelemetrySnapshot& snapshot) {
+  if (snapshot.valid) {
+    snapshot.dirty = true;
+  }
+}
+
+static void updateTelemetrySnapshot(
+  TelemetrySnapshot& snapshot,
+  const ModbusReadResult& result,
+  uint16_t startRegister,
+  uint16_t registerCount,
+  const char* label,
+  const char* safety
+) {
+  if (!result.ok) return;
+  snapshot.valid = true;
+  snapshot.dirty = true;
+  snapshot.payloadHex = result.payloadHex;
+  snapshot.length = result.length;
+  snapshot.notifyCount = result.notifyCount;
+  snapshot.startRegister = startRegister;
+  snapshot.registerCount = registerCount;
+  snapshot.label = label != nullptr ? label : "";
+  snapshot.safety = safety != nullptr ? safety : "";
+  snapshot.observedMs = millis();
+}
+
+static bool flushTelemetrySnapshot(TelemetrySnapshot& snapshot) {
+  if (!snapshot.valid || !snapshot.dirty) return true;
+  bool ok = postTelemetry(
+    snapshot.payloadHex,
+    snapshot.notifyCount,
+    snapshot.length,
+    snapshot.startRegister,
+    snapshot.registerCount,
+    snapshot.label.c_str(),
+    snapshot.safety.c_str()
+  );
+  if (ok) {
+    snapshot.dirty = false;
+  }
+  return ok;
+}
+
+static void flushDirtyTelemetrySnapshots() {
+  flushTelemetrySnapshot(latestMainTelemetry);
+  flushTelemetrySnapshot(latestSettingsTelemetry);
+  flushTelemetrySnapshot(latestStatsTelemetry);
+}
+
+static void resetModbusSession(const char* reason) {
+  if (modbusClient != nullptr && modbusClient->isConnected()) {
+    modbusClient->disconnect();
+    delay(100);
+  }
+  modbusCharacteristic = nullptr;
+  modbusNotifyRegistered = false;
+  modbusReconnectFailureCount = 0;
+  modbusReconnectBackoffUntilMs = 0;
+  emitBleSessionEvent("ble_session_reset", reason);
+}
+
+static void invalidateModbusSession(const char* reason) {
+  if (modbusClient != nullptr && modbusClient->isConnected()) {
+    modbusClient->disconnect();
+    delay(100);
+  }
+  modbusCharacteristic = nullptr;
+  modbusNotifyRegistered = false;
+  static const unsigned long backoffStepsMs[] = {1000, 2000, 5000, 10000, 30000};
+  size_t stepIndex = modbusReconnectFailureCount;
+  if (stepIndex >= (sizeof(backoffStepsMs) / sizeof(backoffStepsMs[0]))) {
+    stepIndex = (sizeof(backoffStepsMs) / sizeof(backoffStepsMs[0])) - 1;
+  }
+  modbusReconnectBackoffUntilMs = millis() + backoffStepsMs[stepIndex];
+  if (modbusReconnectFailureCount < 255) {
+    modbusReconnectFailureCount++;
+  }
+  emitBleSessionEvent("ble_session_invalidated", reason);
+}
+
+static bool ensureModbusSession() {
+  if (targetMac.length() == 0) {
+    emitError("target_not_set", "run SET_TARGET before reading BLE Modbus data");
+    return false;
+  }
+  if (!targetAddressTypeKnown) {
+    emitError("address_type_unknown", "scan the target once before reading BLE Modbus data");
+    return false;
+  }
+
+  if (modbusClient != nullptr && modbusClient->isConnected() && modbusCharacteristic != nullptr) {
+    return true;
+  }
+
+  unsigned long now = millis();
+  if ((long)(now - modbusReconnectBackoffUntilMs) < 0) {
+    return false;
+  }
+
+  if (modbusClient == nullptr) {
+    modbusClient = BLEDevice::createClient();
+  } else if (modbusClient->isConnected()) {
+    modbusClient->disconnect();
+    delay(100);
+  }
+
+  emitBleSessionEvent("ble_session_connecting", "direct_target_reconnect");
+  bool connected = modbusClient->connect(BLEAddress(targetMac.c_str()), targetAddressType);
+  if (!connected) {
+    emitError("gatt_connect_failed", "could not connect to target for BLE Modbus session");
+    invalidateModbusSession("gatt_connect_failed");
+    return false;
+  }
+
+  BLERemoteService* service = modbusClient->getService(BLEUUID(LUMENTREE_VENDOR_SERVICE_UUID));
+  if (service == nullptr) {
+    emitError("gatt_service_missing", "FFE0 service not found");
+    invalidateModbusSession("gatt_service_missing");
+    return false;
+  }
+
+  BLERemoteCharacteristic* chr = service->getCharacteristic(BLEUUID(LUMENTREE_VENDOR_CHARACTERISTIC_UUID));
+  if (chr == nullptr) {
+    emitError("gatt_characteristic_missing", "FFE1 characteristic not found");
+    invalidateModbusSession("gatt_characteristic_missing");
+    return false;
+  }
+  if (!chr->canWrite() && !chr->canWriteNoResponse()) {
+    emitError("gatt_write_missing", "FFE1 cannot carry Modbus traffic");
+    invalidateModbusSession("gatt_write_missing");
+    return false;
+  }
+
+  modbusCharacteristic = chr;
+  modbusNotifyRegistered = false;
+  if (chr->canNotify() || chr->canIndicate()) {
+    chr->registerForNotify(modbusNotifyCallback);
+    delay(100);
+    modbusNotifyRegistered = true;
+  }
+
+  modbusReconnectFailureCount = 0;
+  modbusReconnectBackoffUntilMs = 0;
+  emitBleSessionEvent("ble_session_ready", "session_established");
+  return true;
+}
+
+static bool runModbusRequest(
+  const String& commandHex,
+  const char* label,
+  const char* startEventType,
+  const char* requestSafety,
+  const char* responseSafety,
+  ModbusReadResult& result
+) {
+  std::string commandBytes;
+  if (!hexToBytes(commandHex, commandBytes)) {
+    emitError("command_build_failed", "could not build Modbus request");
+    return false;
+  }
+  if (!ensureModbusSession()) {
+    return false;
+  }
+  if (modbusCharacteristic == nullptr) {
+    invalidateModbusSession("characteristic_not_ready");
+    return false;
+  }
+
+  JsonDocument sent;
+  sent["type"] = startEventType;
+  sent["uptime_ms"] = millis() - bootMs;
+  sent["target_mac"] = targetMac;
+  sent["label"] = label;
+  sent["command_hex"] = commandHex;
+  sent["write_with_response"] = modbusCharacteristic->canWrite();
+  sent["safety"] = requestSafety;
+  printJson(sent);
+
+  modbusNotifyReceived = false;
+  modbusLastNotifyMs = 0;
+  modbusNotifyCount = 0;
+  modbusResponseBytes.clear();
+
+  modbusCharacteristic->writeValue((uint8_t*)commandBytes.data(), commandBytes.length(), modbusCharacteristic->canWrite());
+
+  unsigned long deadline = millis() + 5000;
+  while (millis() < deadline) {
+    feedWatchdog();
+    delay(50);
+    if (modbusNotifyReceived && millis() - modbusLastNotifyMs > 600) break;
+  }
+
+  if (modbusResponseBytes.length() > 0) {
+    result.ok = true;
+    result.payloadHex = bytesToHex(modbusResponseBytes);
+    result.length = modbusResponseBytes.length();
+    result.notifyCount = modbusNotifyCount;
+    JsonDocument response;
+    response["type"] = "ble_modbus_response";
+    response["uptime_ms"] = millis() - bootMs;
+    response["target_mac"] = targetMac;
+    response["label"] = label;
+    response["payload_hex"] = result.payloadHex;
+    response["length"] = modbusResponseBytes.length();
+    response["notify_count"] = modbusNotifyCount;
+    response["safety"] = responseSafety;
+    printJson(response);
+    return true;
+  }
+
+  if (modbusCharacteristic->canRead()) {
+    std::string value = modbusCharacteristic->readValue();
+    if (value.length() > 0) {
+      result.ok = true;
+      result.payloadHex = bytesToHex(value);
+      result.length = value.length();
+      result.notifyCount = modbusNotifyCount;
+      JsonDocument readDoc;
+      readDoc["type"] = "ble_modbus_read_value";
+      readDoc["uptime_ms"] = millis() - bootMs;
+      readDoc["target_mac"] = targetMac;
+      readDoc["label"] = label;
+      readDoc["payload_hex"] = result.payloadHex;
+      readDoc["length"] = value.length();
+      readDoc["safety"] = responseSafety;
+      printJson(readDoc);
+      return true;
+    }
+  }
+
+  invalidateModbusSession("request_timeout_or_empty_response");
+  return false;
 }
 
 static String normalizeMac(String mac) {
@@ -788,6 +1076,7 @@ static void setupProvisioningWebServer() {
     targetAddressType = (esp_ble_addr_type_t)nextAddressType;
     targetAddressTypeKnown = true;
     pairingStatus = "paired";
+    resetModbusSession("portal_candidate_selected");
     saveStringConfig("device_id", deviceId);
     saveStringConfig("target_mac", targetMac);
     postGatewayStatus("portal_candidate_selected");
@@ -1053,6 +1342,17 @@ static bool uploadSettingsSnapshotNow(const char* reason) {
   );
   if (ok) {
     lastSettingsUploadMs = millis();
+  }
+  updateTelemetrySnapshot(
+    latestSettingsTelemetry,
+    settings,
+    95,
+    95,
+    "settings_registers_95_189",
+    "function_03_read_only_no_setting_write"
+  );
+  if (ok) {
+    latestSettingsTelemetry.dirty = false;
   }
 
   JsonDocument log;
@@ -1415,9 +1715,10 @@ static void maybeAccelerateAfterWriteCommand(const char* status, JsonDocument& r
   }
   if (strcmp(status, "completed") == 0) {
     uploadSettingsSnapshotNow("post_write_command_completed");
+    nextSettingsPollMs = millis() + SETTINGS_UPLOAD_INTERVAL_MS;
   }
   lastCommandPollMs = 0;
-  nextUploadMs = millis() + ((unsigned long)uploadIntervalSeconds * 1000UL);
+  nextUploadMs = millis() + telemetryIntervalMs();
 
   JsonDocument log;
   log["type"] = "write_lane_accelerated";
@@ -1440,11 +1741,6 @@ static bool runModbusWriteSingleRegisterFunction16(uint16_t registerAddress, uin
 
   String commandHex = buildWriteSingleRegisterFunction16Command(1, registerAddress, value);
   String expectedAckHex = buildWriteMultipleRegistersAck(1, registerAddress, 1);
-  std::string commandBytes;
-  if (!hexToBytes(commandHex, commandBytes)) {
-    emitError("command_build_failed", "could not build Modbus function 16 write command");
-    return false;
-  }
 
   JsonDocument start;
   start["type"] = "ble_modbus_write_multiple_registers_start";
@@ -1461,73 +1757,17 @@ static bool runModbusWriteSingleRegisterFunction16(uint16_t registerAddress, uin
   start["characteristic_uuid"] = LUMENTREE_VENDOR_CHARACTERISTIC_UUID;
   start["safety"] = "semantic_function_16_single_register_write";
   printJson(start);
+  ModbusReadResult writeResult;
+  runModbusRequest(
+    commandHex,
+    label,
+    "ble_modbus_write_multiple_registers_sent",
+    "semantic_function_16_single_register_write",
+    "function_16_semantic_single_register_write_done",
+    writeResult
+  );
 
-  if (modbusClient == nullptr) {
-    modbusClient = BLEDevice::createClient();
-  }
-  if (modbusClient->isConnected()) {
-    modbusClient->disconnect();
-    delay(250);
-  }
-
-  bool connected = modbusClient->connect(BLEAddress(targetMac.c_str()), targetAddressType);
-  if (!connected) {
-    emitError("gatt_connect_failed", "could not connect to target for BLE Modbus write");
-    return false;
-  }
-
-  BLERemoteService* service = modbusClient->getService(BLEUUID(LUMENTREE_VENDOR_SERVICE_UUID));
-  if (service == nullptr) {
-    emitError("gatt_service_missing", "FFE0 service not found");
-    modbusClient->disconnect();
-    return false;
-  }
-
-  BLERemoteCharacteristic* chr = service->getCharacteristic(BLEUUID(LUMENTREE_VENDOR_CHARACTERISTIC_UUID));
-  if (chr == nullptr) {
-    emitError("gatt_characteristic_missing", "FFE1 characteristic not found");
-    modbusClient->disconnect();
-    return false;
-  }
-  if (!chr->canWrite() && !chr->canWriteNoResponse()) {
-    emitError("gatt_write_missing", "FFE1 cannot carry Modbus write request");
-    modbusClient->disconnect();
-    return false;
-  }
-
-  modbusNotifyReceived = false;
-  modbusLastNotifyMs = 0;
-  modbusNotifyCount = 0;
-  modbusResponseBytes.clear();
-  if (chr->canNotify() || chr->canIndicate()) {
-    chr->registerForNotify(modbusNotifyCallback);
-    delay(200);
-  }
-
-  JsonDocument sent;
-  sent["type"] = "ble_modbus_write_multiple_registers_sent";
-  sent["uptime_ms"] = millis() - bootMs;
-  sent["target_mac"] = targetMac;
-  sent["label"] = label;
-  sent["register"] = registerAddress;
-  sent["value"] = value;
-  sent["command_hex"] = commandHex;
-  sent["write_with_response"] = chr->canWrite();
-  printJson(sent);
-
-  chr->writeValue((uint8_t*)commandBytes.data(), commandBytes.length(), chr->canWrite());
-
-  unsigned long deadline = millis() + 5000;
-  while (millis() < deadline) {
-    feedWatchdog();
-    delay(50);
-    if (modbusNotifyReceived && millis() - modbusLastNotifyMs > 600) break;
-  }
-
-  String responseHex = "";
-  if (modbusResponseBytes.length() > 0) {
-    responseHex = bytesToHex(modbusResponseBytes);
-  }
+  String responseHex = writeResult.ok ? writeResult.payloadHex : "";
   bool ackMatches = responseHex == expectedAckHex || responseHex.endsWith(expectedAckHex);
 
   JsonDocument done;
@@ -1542,10 +1782,6 @@ static bool runModbusWriteSingleRegisterFunction16(uint16_t registerAddress, uin
   done["notify_count"] = modbusNotifyCount;
   done["safety"] = "function_16_semantic_single_register_write_done";
   printJson(done);
-
-  delay(200);
-  modbusClient->disconnect();
-  delay(500);
   return ackMatches;
 }
 
@@ -2643,6 +2879,7 @@ static bool runBleDiscovery(bool allowAutoBind) {
       deviceId = candidate.name;
       saveStringConfig("device_id", deviceId);
     }
+    resetModbusSession("auto_pair_target_selected");
     targetMac = candidate.mac;
     targetAddressType = (esp_ble_addr_type_t)candidate.addressType;
     targetAddressTypeKnown = true;
@@ -2766,21 +3003,7 @@ static void runGattDiscovery() {
 
 static ModbusReadResult runModbusRead(uint16_t startRegister, uint16_t registerCount, const char* label) {
   ModbusReadResult result;
-  if (targetMac.length() == 0) {
-    emitError("target_not_set", "run SET_TARGET before reading BLE Modbus data");
-    return result;
-  }
-  if (!targetAddressTypeKnown) {
-    emitError("address_type_unknown", "scan the target once before reading BLE Modbus data");
-    return result;
-  }
-
   String commandHex = buildReadCommand(1, startRegister, registerCount);
-  std::string commandBytes;
-  if (!hexToBytes(commandHex, commandBytes)) {
-    emitError("command_build_failed", "could not build Modbus read command");
-    return result;
-  }
 
   JsonDocument start;
   start["type"] = "ble_modbus_read_start";
@@ -2795,100 +3018,14 @@ static ModbusReadResult runModbusRead(uint16_t startRegister, uint16_t registerC
   start["characteristic_uuid"] = LUMENTREE_VENDOR_CHARACTERISTIC_UUID;
   start["safety"] = "function_03_read_only_no_setting_write";
   printJson(start);
-
-  if (modbusClient == nullptr) {
-    modbusClient = BLEDevice::createClient();
-  }
-  if (modbusClient->isConnected()) {
-    modbusClient->disconnect();
-    delay(250);
-  }
-
-  bool connected = modbusClient->connect(BLEAddress(targetMac.c_str()), targetAddressType);
-  if (!connected) {
-    emitError("gatt_connect_failed", "could not connect to target for BLE Modbus read");
-    return result;
-  }
-
-  BLERemoteService* service = modbusClient->getService(BLEUUID(LUMENTREE_VENDOR_SERVICE_UUID));
-  if (service == nullptr) {
-    emitError("gatt_service_missing", "FFE0 service not found");
-    modbusClient->disconnect();
-    return result;
-  }
-
-  BLERemoteCharacteristic* chr = service->getCharacteristic(BLEUUID(LUMENTREE_VENDOR_CHARACTERISTIC_UUID));
-  if (chr == nullptr) {
-    emitError("gatt_characteristic_missing", "FFE1 characteristic not found");
-    modbusClient->disconnect();
-    return result;
-  }
-  if (!chr->canWrite() && !chr->canWriteNoResponse()) {
-    emitError("gatt_write_missing", "FFE1 cannot carry Modbus read request");
-    modbusClient->disconnect();
-    return result;
-  }
-
-  modbusNotifyReceived = false;
-  modbusLastNotifyMs = 0;
-  modbusNotifyCount = 0;
-  modbusResponseBytes.clear();
-  if (chr->canNotify() || chr->canIndicate()) {
-    chr->registerForNotify(modbusNotifyCallback);
-    delay(200);
-  }
-
-  JsonDocument sent;
-  sent["type"] = "ble_modbus_read_request_sent";
-  sent["uptime_ms"] = millis() - bootMs;
-  sent["target_mac"] = targetMac;
-  sent["label"] = label;
-  sent["command_hex"] = commandHex;
-  sent["write_with_response"] = chr->canWrite();
-  printJson(sent);
-
-  chr->writeValue((uint8_t*)commandBytes.data(), commandBytes.length(), chr->canWrite());
-
-  unsigned long deadline = millis() + 5000;
-  while (millis() < deadline) {
-    feedWatchdog();
-    delay(50);
-    if (modbusNotifyReceived && millis() - modbusLastNotifyMs > 600) break;
-  }
-
-  if (modbusResponseBytes.length() > 0) {
-    result.ok = true;
-    result.payloadHex = bytesToHex(modbusResponseBytes);
-    result.length = modbusResponseBytes.length();
-    result.notifyCount = modbusNotifyCount;
-    JsonDocument response;
-    response["type"] = "ble_modbus_response";
-    response["uptime_ms"] = millis() - bootMs;
-    response["target_mac"] = targetMac;
-    response["label"] = label;
-    response["payload_hex"] = result.payloadHex;
-    response["length"] = modbusResponseBytes.length();
-    response["notify_count"] = modbusNotifyCount;
-    response["safety"] = "reassembled_function_03_read_response_only";
-    printJson(response);
-  } else if (chr->canRead()) {
-    std::string value = chr->readValue();
-    if (value.length() > 0) {
-      result.ok = true;
-      result.payloadHex = bytesToHex(value);
-      result.length = value.length();
-      result.notifyCount = modbusNotifyCount;
-      JsonDocument readDoc;
-      readDoc["type"] = "ble_modbus_read_value";
-      readDoc["uptime_ms"] = millis() - bootMs;
-      readDoc["target_mac"] = targetMac;
-      readDoc["label"] = label;
-      readDoc["payload_hex"] = result.payloadHex;
-      readDoc["length"] = value.length();
-      readDoc["safety"] = "read_request_response_only_no_setting_write";
-      printJson(readDoc);
-    }
-  }
+  runModbusRequest(
+    commandHex,
+    label,
+    "ble_modbus_read_request_sent",
+    "function_03_read_only_no_setting_write",
+    "reassembled_function_03_read_response_only",
+    result
+  );
 
   JsonDocument done;
   done["type"] = "ble_modbus_read_done";
@@ -2898,30 +3035,12 @@ static ModbusReadResult runModbusRead(uint16_t startRegister, uint16_t registerC
   done["notify_count"] = modbusNotifyCount;
   done["safety"] = "function_03_read_only_no_setting_write";
   printJson(done);
-
-  delay(200);
-  modbusClient->disconnect();
-  delay(500);
   return result;
 }
 
 static ModbusReadResult runModbusReadInput(uint16_t startRegister, uint16_t registerCount, const char* label) {
   ModbusReadResult result;
-  if (targetMac.length() == 0) {
-    emitError("target_not_set", "run SET_TARGET before reading BLE Modbus data");
-    return result;
-  }
-  if (!targetAddressTypeKnown) {
-    emitError("address_type_unknown", "scan the target once before reading BLE Modbus data");
-    return result;
-  }
-
   String commandHex = buildReadInputCommand(1, startRegister, registerCount);
-  std::string commandBytes;
-  if (!hexToBytes(commandHex, commandBytes)) {
-    emitError("command_build_failed", "could not build Modbus input-register read command");
-    return result;
-  }
 
   JsonDocument start;
   start["type"] = "ble_modbus_read_start";
@@ -2936,100 +3055,14 @@ static ModbusReadResult runModbusReadInput(uint16_t startRegister, uint16_t regi
   start["characteristic_uuid"] = LUMENTREE_VENDOR_CHARACTERISTIC_UUID;
   start["safety"] = "function_04_read_only_input_registers";
   printJson(start);
-
-  if (modbusClient == nullptr) {
-    modbusClient = BLEDevice::createClient();
-  }
-  if (modbusClient->isConnected()) {
-    modbusClient->disconnect();
-    delay(250);
-  }
-
-  bool connected = modbusClient->connect(BLEAddress(targetMac.c_str()), targetAddressType);
-  if (!connected) {
-    emitError("gatt_connect_failed", "could not connect to target for BLE Modbus read");
-    return result;
-  }
-
-  BLERemoteService* service = modbusClient->getService(BLEUUID(LUMENTREE_VENDOR_SERVICE_UUID));
-  if (service == nullptr) {
-    emitError("gatt_service_missing", "FFE0 service not found");
-    modbusClient->disconnect();
-    return result;
-  }
-
-  BLERemoteCharacteristic* chr = service->getCharacteristic(BLEUUID(LUMENTREE_VENDOR_CHARACTERISTIC_UUID));
-  if (chr == nullptr) {
-    emitError("gatt_characteristic_missing", "FFE1 characteristic not found");
-    modbusClient->disconnect();
-    return result;
-  }
-  if (!chr->canWrite() && !chr->canWriteNoResponse()) {
-    emitError("gatt_write_missing", "FFE1 cannot carry Modbus read request");
-    modbusClient->disconnect();
-    return result;
-  }
-
-  modbusNotifyReceived = false;
-  modbusLastNotifyMs = 0;
-  modbusNotifyCount = 0;
-  modbusResponseBytes.clear();
-  if (chr->canNotify() || chr->canIndicate()) {
-    chr->registerForNotify(modbusNotifyCallback);
-    delay(200);
-  }
-
-  JsonDocument sent;
-  sent["type"] = "ble_modbus_read_request_sent";
-  sent["uptime_ms"] = millis() - bootMs;
-  sent["target_mac"] = targetMac;
-  sent["label"] = label;
-  sent["command_hex"] = commandHex;
-  sent["write_with_response"] = chr->canWrite();
-  printJson(sent);
-
-  chr->writeValue((uint8_t*)commandBytes.data(), commandBytes.length(), chr->canWrite());
-
-  unsigned long deadline = millis() + 5000;
-  while (millis() < deadline) {
-    feedWatchdog();
-    delay(50);
-    if (modbusNotifyReceived && millis() - modbusLastNotifyMs > 600) break;
-  }
-
-  if (modbusResponseBytes.length() > 0) {
-    result.ok = true;
-    result.payloadHex = bytesToHex(modbusResponseBytes);
-    result.length = modbusResponseBytes.length();
-    result.notifyCount = modbusNotifyCount;
-    JsonDocument response;
-    response["type"] = "ble_modbus_response";
-    response["uptime_ms"] = millis() - bootMs;
-    response["target_mac"] = targetMac;
-    response["label"] = label;
-    response["payload_hex"] = result.payloadHex;
-    response["length"] = modbusResponseBytes.length();
-    response["notify_count"] = modbusNotifyCount;
-    response["safety"] = "reassembled_function_04_read_response_only";
-    printJson(response);
-  } else if (chr->canRead()) {
-    std::string value = chr->readValue();
-    if (value.length() > 0) {
-      result.ok = true;
-      result.payloadHex = bytesToHex(value);
-      result.length = value.length();
-      result.notifyCount = modbusNotifyCount;
-      JsonDocument readDoc;
-      readDoc["type"] = "ble_modbus_read_value";
-      readDoc["uptime_ms"] = millis() - bootMs;
-      readDoc["target_mac"] = targetMac;
-      readDoc["label"] = label;
-      readDoc["payload_hex"] = result.payloadHex;
-      readDoc["length"] = value.length();
-      readDoc["safety"] = "read_request_response_only_no_setting_write";
-      printJson(readDoc);
-    }
-  }
+  runModbusRequest(
+    commandHex,
+    label,
+    "ble_modbus_read_request_sent",
+    "function_04_read_only_input_registers",
+    "reassembled_function_04_read_response_only",
+    result
+  );
 
   JsonDocument done;
   done["type"] = "ble_modbus_read_done";
@@ -3039,10 +3072,6 @@ static ModbusReadResult runModbusReadInput(uint16_t startRegister, uint16_t regi
   done["notify_count"] = modbusNotifyCount;
   done["safety"] = "function_04_read_only_input_registers";
   printJson(done);
-
-  delay(200);
-  modbusClient->disconnect();
-  delay(500);
   return result;
 }
 
@@ -3539,24 +3568,91 @@ static void runWifiScan() {
   }
 }
 
-static void maybeRunProductionUpload() {
+static void maybeRunTelemetryScheduler() {
   if (!productionEnabled) return;
   if (pendingCommandResultId != 0) return;
   unsigned long now = millis();
   if (nextUploadMs == 0) {
     nextUploadMs = now + 2000;
-    return;
   }
-  if ((long)(now - nextUploadMs) < 0) return;
+  if (nextSettingsPollMs == 0) {
+    nextSettingsPollMs = now + 5000;
+  }
+  if (nextStatsPollMs == 0) {
+    nextStatsPollMs = now + 8000;
+  }
   if (targetMac.length() == 0 && lastAutoDiscoveryMs != 0 && now - lastAutoDiscoveryMs < AUTO_DISCOVERY_RETRY_MS) {
-    nextUploadMs = millis() + 5000;
+    flushDirtyTelemetrySnapshots();
     return;
   }
   if (targetMac.length() == 0) {
     lastAutoDiscoveryMs = now;
+    if (!runBleDiscovery(true)) {
+      emitError("target_not_paired", "waiting for ESP32 gateway pairing");
+      flushDirtyTelemetrySnapshots();
+      return;
+    }
   }
-  runUploadOnce();
-  nextUploadMs = millis() + ((unsigned long)uploadIntervalSeconds * 1000UL);
+
+  if ((long)(now - nextUploadMs) >= 0) {
+    ModbusReadResult result = runModbusRead(0, 95, "main_registers_0_94");
+    if (result.ok) {
+      updateTelemetrySnapshot(
+        latestMainTelemetry,
+        result,
+        0,
+        95,
+        "main_registers_0_94",
+        "function_03_read_only_no_setting_write"
+      );
+    } else {
+      emitError("ble_read_empty", "no Modbus response payload for main telemetry");
+      markTelemetrySnapshotDirty(latestMainTelemetry);
+    }
+    nextUploadMs = millis() + telemetryIntervalMs();
+  }
+
+  now = millis();
+  if ((long)(now - nextSettingsPollMs) >= 0) {
+    ModbusReadResult settings = runModbusRead(95, 95, "settings_registers_95_189");
+    if (settings.ok) {
+      updateTelemetrySnapshot(
+        latestSettingsTelemetry,
+        settings,
+        95,
+        95,
+        "settings_registers_95_189",
+        "function_03_read_only_no_setting_write"
+      );
+      lastSettingsUploadMs = millis();
+    } else {
+      emitError("settings_read_empty", "no settings Modbus response payload to cache");
+      markTelemetrySnapshotDirty(latestSettingsTelemetry);
+    }
+    nextSettingsPollMs = millis() + SETTINGS_UPLOAD_INTERVAL_MS;
+  }
+
+  now = millis();
+  if ((long)(now - nextStatsPollMs) >= 0) {
+    ModbusReadResult stats = runModbusReadInput(0, 8, "today_statistics_0_7");
+    if (stats.ok) {
+      updateTelemetrySnapshot(
+        latestStatsTelemetry,
+        stats,
+        0,
+        8,
+        "today_statistics_0_7",
+        "function_04_read_only_input_registers"
+      );
+      lastStatsUploadMs = millis();
+    } else {
+      emitError("stats_read_empty", "no statistics Modbus response payload to cache");
+      markTelemetrySnapshotDirty(latestStatsTelemetry);
+    }
+    nextStatsPollMs = millis() + STATS_UPLOAD_INTERVAL_MS;
+  }
+
+  flushDirtyTelemetrySnapshots();
 }
 
 static void maybeEmitHeartbeat() {
@@ -3594,12 +3690,14 @@ static void handleCommand(String line) {
   } else if (line == "CONFIG") {
     emitConfig("config");
   } else if (line == "CLEAR_TARGET" || line == "CLEAR_TARGET_MAC") {
+    resetModbusSession("target_cleared");
     targetMac = "";
     targetAddressTypeKnown = false;
     pairingStatus = "unconfigured";
     prefs.remove("target_mac");
     emitAck(line == "CLEAR_TARGET" ? "CLEAR_TARGET" : "CLEAR_TARGET_MAC");
   } else if (line.startsWith("SET_TARGET ") || line.startsWith("SET_TARGET_MAC ")) {
+    resetModbusSession("target_changed");
     int offset = line.startsWith("SET_TARGET_MAC ") ? 15 : 11;
     targetMac = normalizeMac(line.substring(offset));
     targetAddressTypeKnown = targetMac.length() > 0;
@@ -3777,7 +3875,7 @@ void loop() {
   }
   handleProvisioningPortal();
   pollPendingCommand();
-  maybeRunProductionUpload();
+  maybeRunTelemetryScheduler();
   maybeEmitHeartbeat();
   feedWatchdog();
   delay(10);
