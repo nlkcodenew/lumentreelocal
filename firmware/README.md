@@ -57,6 +57,7 @@ Important:
 ### Experimental build target now present in codebase
 
 - `esp32-s3-4mb-nopsram-experimental`
+- `esp32-c3-4mb-experimental`
 
 What this means:
 
