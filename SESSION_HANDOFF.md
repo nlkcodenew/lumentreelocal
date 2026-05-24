@@ -56,6 +56,10 @@ remote = origin
     for the real `ESP32-C3` refactor outcome, recommended firmware, and exact
     rollback procedure to both the last good refactor stage and the exact
     pre-refactor checkpoint
+17. `docs/status/2026-05-24-c3-placement-and-ota-next-direction.md`
+    for the recorded next-step direction: move the `ESP32-C3` near the
+    inverter, use floor-3 Wi-Fi, and treat OTA as the next operational
+    priority with explicit `4MB` flash-layout constraints
 
 ## Current Baseline
 
