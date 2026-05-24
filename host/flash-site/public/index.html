@@ -25,7 +25,7 @@
       min-height: 100vh;
     }
     main {
-      max-width: 760px;
+      max-width: 980px;
       margin: 0 auto;
       padding: 40px 20px 56px;
     }
@@ -33,6 +33,14 @@
       margin: 0 0 10px;
       font-size: 2rem;
       line-height: 1.1;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.2rem;
+    }
+    h3 {
+      margin: 0 0 8px;
+      font-size: 1.12rem;
     }
     .lead {
       color: var(--muted);
@@ -99,6 +107,47 @@
       align-items: flex-start;
       gap: 14px;
     }
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .board-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .board-level {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .board-level.stable {
+      background: rgba(47, 129, 247, 0.12);
+      color: #8ab4ff;
+    }
+    .board-level.experimental {
+      background: rgba(210, 153, 34, 0.12);
+      color: #f2cc60;
+    }
+    .board-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+    .board-copy {
+      color: var(--muted);
+      margin: 0 0 12px;
+      line-height: 1.55;
+    }
     esp-web-install-button::part(button) {
       background: linear-gradient(180deg, var(--accent), var(--accent-2));
       color: white;
@@ -109,13 +158,8 @@
       font-weight: 700;
       cursor: pointer;
     }
-    p, li {
-      line-height: 1.6;
-    }
-    ol {
-      margin: 0;
-      padding-left: 20px;
-    }
+    p, li { line-height: 1.6; }
+    ol { margin: 0; padding-left: 20px; }
     code {
       background: rgba(255, 255, 255, 0.06);
       border: 1px solid var(--line);
@@ -128,9 +172,7 @@
       color: var(--muted);
       font-size: 0.9rem;
     }
-    a {
-      color: #58a6ff;
-    }
+    a { color: #58a6ff; }
   </style>
 </head>
 <body>
@@ -139,8 +181,7 @@
       <div>
         <h1 data-i18n="title">Lumentree Local Flash</h1>
         <p class="lead" data-i18n="lead">
-          Nạp firmware cầu nối BLE Lumentree cho ESP32-S3 qua WebSerial.
-          Trang này chỉ dùng để nạp qua USB. Sau khi firmware khởi động, vào portal để cấu hình Wi-Fi, API URL, token và thông số thiết bị.
+          Nạp firmware cầu nối BLE Lumentree qua WebSerial. Chọn đúng dòng firmware theo board của bạn trước khi bấm flash. Sau khi firmware khởi động, vào portal để cấu hình Wi-Fi và hoàn tất bước ghép nối với Home Assistant.
         </p>
       </div>
       <div class="lang-switch" aria-label="Language switch">
@@ -151,11 +192,11 @@
 
     <section class="panel">
       <div class="meta">
-        <span class="badge" data-i18n="badge_board">Board: ESP32-S3</span>
-        <span class="badge" id="firmware-version-badge">Firmware: đang tải...</span>
+        <span class="badge" data-i18n="badge_board">Dòng firmware: nhiều board</span>
+        <span class="badge" id="firmware-version-badge">Manifest: đang tải...</span>
         <span class="badge" data-i18n="badge_transport">Kết nối: USB WebSerial</span>
-        <span class="badge" data-i18n="badge_flash">Flash tối thiểu: 8MB</span>
-        <span class="badge" data-i18n="badge_psram">PSRAM: tùy chọn</span>
+        <span class="badge" data-i18n="badge_flash">Yêu cầu flash: xem theo từng board</span>
+        <span class="badge" data-i18n="badge_psram">PSRAM: không bắt buộc</span>
       </div>
 
       <div class="warn" data-i18n="warn">
@@ -163,15 +204,52 @@
       </div>
 
       <p class="small" data-i18n="supported">
-        Hỗ trợ chính thức: ESP32-S3 có flash từ 8MB trở lên. Các board dưới 8MB flash không được hỗ trợ trong dòng firmware này.
+        ESP32-S3 hiện là dòng stable. ESP32-C3 Super Mini đã build, flash và chạy thực tế thành công nhưng vẫn được gắn nhãn experimental để user tự chọn có dùng hay không.
       </p>
 
-      <div class="flash-box">
-        <esp-web-install-button manifest="/firmware/flash-manifest.json">
-          <span slot="activate" data-i18n="flash_button">Nạp firmware</span>
-          <span slot="unsupported" data-i18n="flash_unsupported">Trình duyệt này không hỗ trợ WebSerial</span>
-          <span slot="not-allowed" data-i18n="flash_https">WebSerial yêu cầu HTTPS</span>
-        </esp-web-install-button>
+      <div class="board-grid">
+        <section class="board-card">
+          <div class="board-level stable" data-i18n="s3_level">Stable</div>
+          <h3 data-i18n="s3_title">ESP32-S3</h3>
+          <p class="board-copy" data-i18n="s3_copy">
+            Dành cho line production đã chạy ổn định lâu dài. Đây là lựa chọn mặc định nếu board của bạn là ESP32-S3.
+          </p>
+          <div class="board-meta">
+            <span class="badge" data-i18n="s3_flash">Flash: 8MB trở lên</span>
+            <span class="badge" data-i18n="s3_psram">PSRAM: tùy chọn</span>
+            <span class="badge" id="firmware-version-s3">ESP32-S3: đang tải...</span>
+          </div>
+          <div class="flash-box">
+            <esp-web-install-button manifest="/firmware/esp32-s3/flash-manifest.json">
+              <span slot="activate" data-i18n="s3_button">Nạp firmware ESP32-S3</span>
+              <span slot="unsupported" data-i18n="flash_unsupported">Trình duyệt này không hỗ trợ WebSerial</span>
+              <span slot="not-allowed" data-i18n="flash_https">WebSerial yêu cầu HTTPS</span>
+            </esp-web-install-button>
+          </div>
+        </section>
+
+        <section class="board-card">
+          <div class="board-level experimental" data-i18n="c3_level">Experimental</div>
+          <h3 data-i18n="c3_title">ESP32-C3 Super Mini</h3>
+          <p class="board-copy" data-i18n="c3_copy">
+            Dành cho board 4MB kiểu ESP32-C3 Super Mini. Bản này đã build, flash, boot và chạy thực tế end-to-end, nhưng vẫn chưa được xem là stable line.
+          </p>
+          <div class="board-meta">
+            <span class="badge" data-i18n="c3_flash">Flash: 4MB</span>
+            <span class="badge" data-i18n="c3_psram">PSRAM: không có / không cần</span>
+            <span class="badge" id="firmware-version-c3">ESP32-C3: đang tải...</span>
+          </div>
+          <div class="flash-box">
+            <esp-web-install-button manifest="/firmware/esp32-c3/flash-manifest.json">
+              <span slot="activate" data-i18n="c3_button">Nạp firmware ESP32-C3</span>
+              <span slot="unsupported" data-i18n="flash_unsupported">Trình duyệt này không hỗ trợ WebSerial</span>
+              <span slot="not-allowed" data-i18n="flash_https">WebSerial yêu cầu HTTPS</span>
+            </esp-web-install-button>
+          </div>
+        </section>
+      </div>
+
+      <div class="flash-box" style="margin-top: 16px;">
         <p class="small" data-i18n="port_hint">
           Nếu cổng serial không hiện ra, giữ board vào boot mode hoặc rút cắm USB lại một lần.
         </p>
@@ -192,7 +270,7 @@
     <section class="panel">
       <h2 data-i18n="write_title">Nếu cần write control</h2>
       <ol>
-        <li data-i18n="write_1">Sau khi ESP32 đã online và đang đẩy telemetry, mở lại <code>http://192.168.4.1</code>.</li>
+        <li data-i18n="write_1">Sau khi ESP32 đã online và đang đẩy telemetry, mở lại web local trên LAN.</li>
         <li data-i18n="write_2">Vào mục <code>Write Access</code> và bấm <code>Generate write pairing code</code>.</li>
         <li data-i18n="write_3">Lấy mã vừa sinh ra và mở <code>Lumentree Local</code> trong Home Assistant.</li>
         <li data-i18n="write_4">Vào options của integration, nhập <code>Write pairing code</code> để claim quyền write.</li>
@@ -218,14 +296,25 @@
     const translations = {
       vi: {
         title: "Lumentree Local Flash",
-        lead: "Nạp firmware cầu nối BLE Lumentree cho ESP32-S3 qua WebSerial. Trang này chỉ dùng để nạp qua USB. Sau khi firmware khởi động, vào portal để cấu hình Wi-Fi, API URL, token và thông số thiết bị.",
-        badge_board: "Board: ESP32-S3",
+        lead: "Nạp firmware cầu nối BLE Lumentree qua WebSerial. Chọn đúng dòng firmware theo board của bạn trước khi bấm flash. Sau khi firmware khởi động, vào portal để cấu hình Wi-Fi và hoàn tất bước ghép nối với Home Assistant.",
+        badge_board: "Dòng firmware: nhiều board",
         badge_transport: "Kết nối: USB WebSerial",
-        badge_flash: "Flash tối thiểu: 8MB",
-        badge_psram: "PSRAM: tùy chọn",
+        badge_flash: "Yêu cầu flash: xem theo từng board",
+        badge_psram: "PSRAM: không bắt buộc",
         warn: "Nạp firmware sẽ ghi đè firmware hiện tại trên thiết bị. Cần cáp USB có dữ liệu. Nên dùng Chrome hoặc Edge trên máy tính.",
-        supported: "Hỗ trợ chính thức: ESP32-S3 có flash từ 8MB trở lên. Các board dưới 8MB flash không được hỗ trợ trong dòng firmware này.",
-        flash_button: "Nạp firmware",
+        supported: "ESP32-S3 hiện là dòng stable. ESP32-C3 Super Mini đã build, flash và chạy thực tế thành công nhưng vẫn được gắn nhãn experimental để user tự chọn có dùng hay không.",
+        s3_level: "Stable",
+        s3_title: "ESP32-S3",
+        s3_copy: "Dành cho line production đã chạy ổn định lâu dài. Đây là lựa chọn mặc định nếu board của bạn là ESP32-S3.",
+        s3_flash: "Flash: 8MB trở lên",
+        s3_psram: "PSRAM: tùy chọn",
+        s3_button: "Nạp firmware ESP32-S3",
+        c3_level: "Experimental",
+        c3_title: "ESP32-C3 Super Mini",
+        c3_copy: "Dành cho board 4MB kiểu ESP32-C3 Super Mini. Bản này đã build, flash, boot và chạy thực tế end-to-end, nhưng vẫn chưa được xem là stable line.",
+        c3_flash: "Flash: 4MB",
+        c3_psram: "PSRAM: không có / không cần",
+        c3_button: "Nạp firmware ESP32-C3",
         flash_unsupported: "Trình duyệt này không hỗ trợ WebSerial",
         flash_https: "WebSerial yêu cầu HTTPS",
         port_hint: "Nếu cổng serial không hiện ra, giữ board vào boot mode hoặc rút cắm USB lại một lần.",
@@ -236,7 +325,7 @@
         after_4: "Nhập Wi-Fi và các thông số production trong portal.",
         after_5: "Xác nhận telemetry đã lên được Lumentree Local API trước khi thêm control trong Home Assistant.",
         write_title: "Nếu cần write control",
-        write_1: "Sau khi ESP32 đã online và đang đẩy telemetry, mở lại <code>http://192.168.4.1</code>.",
+        write_1: "Sau khi ESP32 đã online và đang đẩy telemetry, mở lại web local trên LAN.",
         write_2: "Vào mục <code>Write Access</code> và bấm <code>Generate write pairing code</code>.",
         write_3: "Lấy mã vừa sinh ra và mở <code>Lumentree Local</code> trong Home Assistant.",
         write_4: "Vào options của integration, nhập <code>Write pairing code</code> để claim quyền write.",
@@ -245,19 +334,32 @@
         notes_title: "Ghi chú provisioning",
         notes_body: "Thiết bị mới không cần MAC inverter hardcode sẵn. Có thể pair sau provisioning khi hệ thống chỉ tìm thấy đúng một inverter candidate phù hợp.",
         source_repo: "Source repository:",
-        firmware_loading: "Firmware: đang tải...",
-        firmware_unavailable: "Firmware: không truy cập được"
+        firmware_loading: "Manifest: đang tải...",
+        firmware_unavailable: "Manifest: không truy cập được",
+        firmware_s3_unavailable: "ESP32-S3: không truy cập được",
+        firmware_c3_unavailable: "ESP32-C3: không truy cập được"
       },
       en: {
         title: "Lumentree Local Flash",
-        lead: "Flash the dedicated ESP32-S3 Lumentree BLE bridge firmware over WebSerial. This page is only for USB flashing. After the firmware boots, use the portal to configure Wi-Fi, API URL, token, and device settings.",
-        badge_board: "Board: ESP32-S3",
+        lead: "Flash the Lumentree BLE bridge firmware over WebSerial. Choose the correct firmware line for your board before flashing. After boot, use the portal to configure Wi-Fi and finish Home Assistant pairing.",
+        badge_board: "Firmware Line: Multi-board",
         badge_transport: "Transport: USB WebSerial",
-        badge_flash: "Flash Requirement: 8MB minimum",
-        badge_psram: "PSRAM: optional",
+        badge_flash: "Flash Requirement: see each board",
+        badge_psram: "PSRAM: not required",
         warn: "Flashing rewrites the current device firmware. Use a USB data cable. Chrome or Edge on desktop is recommended.",
-        supported: "Official support target: ESP32-S3 boards with 8MB flash or larger. Boards with less than 8MB flash are not supported by this firmware line.",
-        flash_button: "Flash Firmware",
+        supported: "ESP32-S3 is the current stable line. ESP32-C3 Super Mini has now built, flashed, and run successfully in real tests, but it still stays labeled experimental so members can choose it deliberately.",
+        s3_level: "Stable",
+        s3_title: "ESP32-S3",
+        s3_copy: "Use this for the production line that has already been running stably for an extended period. This is the default choice for ESP32-S3 boards.",
+        s3_flash: "Flash: 8MB or larger",
+        s3_psram: "PSRAM: optional",
+        s3_button: "Flash ESP32-S3 Firmware",
+        c3_level: "Experimental",
+        c3_title: "ESP32-C3 Super Mini",
+        c3_copy: "Use this for 4MB-class ESP32-C3 Super Mini boards. This line now builds, flashes, boots, and runs end-to-end in real tests, but it is not yet treated as the stable line.",
+        c3_flash: "Flash: 4MB",
+        c3_psram: "PSRAM: none / not required",
+        c3_button: "Flash ESP32-C3 Firmware",
         flash_unsupported: "This browser does not support WebSerial",
         flash_https: "WebSerial requires HTTPS",
         port_hint: "If the serial port does not appear, hold the board in boot mode or reconnect USB once.",
@@ -268,7 +370,7 @@
         after_4: "Enter Wi-Fi credentials and production settings in the portal.",
         after_5: "Confirm telemetry reaches the Lumentree Local API before adding Home Assistant controls.",
         write_title: "If you need write controls",
-        write_1: "After the ESP32 is online and uploading telemetry, open <code>http://192.168.4.1</code> again.",
+        write_1: "After the ESP32 is online and uploading telemetry, open the local LAN portal again.",
         write_2: "Go to <code>Write Access</code> and press <code>Generate write pairing code</code>.",
         write_3: "Copy the generated code and open <code>Lumentree Local</code> in Home Assistant.",
         write_4: "Open the integration options and enter the <code>Write pairing code</code> to claim write access.",
@@ -277,8 +379,10 @@
         notes_title: "Provisioning Notes",
         notes_body: "New devices do not need a hardcoded inverter MAC. Pairing can happen after provisioning when the system finds exactly one matching inverter candidate.",
         source_repo: "Source repository:",
-        firmware_loading: "Firmware: loading...",
-        firmware_unavailable: "Firmware: unavailable"
+        firmware_loading: "Manifest: loading...",
+        firmware_unavailable: "Manifest: unavailable",
+        firmware_s3_unavailable: "ESP32-S3: unavailable",
+        firmware_c3_unavailable: "ESP32-C3: unavailable"
       }
     };
 
@@ -294,30 +398,35 @@
           node.innerHTML = value;
         }
       });
-
       document.getElementById("lang-vi").classList.toggle("active", lang === "vi");
       document.getElementById("lang-en").classList.toggle("active", lang === "en");
+    }
+
+    function updateManifestBadge(id, label, url, unavailableKey) {
+      fetch(url, { cache: "no-store" })
+        .then((response) => response.json())
+        .then((manifest) => {
+          const version = manifest.version || "unknown";
+          const badge = document.getElementById(id);
+          if (badge) {
+            badge.textContent = `${label} ${version}`;
+          }
+        })
+        .catch(() => {
+          const badge = document.getElementById(id);
+          if (badge) {
+            badge.textContent = translations[currentLanguage][unavailableKey];
+          }
+        });
     }
 
     document.getElementById("lang-vi").addEventListener("click", () => setLanguage("vi"));
     document.getElementById("lang-en").addEventListener("click", () => setLanguage("en"));
     setLanguage("vi");
 
-    fetch("/firmware/flash-manifest.json", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((manifest) => {
-        const version = manifest.version || "unknown";
-        const badge = document.getElementById("firmware-version-badge");
-        if (badge) {
-          badge.textContent = `Firmware: lumentree-ble-bridge ${version}`;
-        }
-      })
-      .catch(() => {
-        const badge = document.getElementById("firmware-version-badge");
-        if (badge) {
-          badge.textContent = translations[currentLanguage].firmware_unavailable;
-        }
-      });
+    updateManifestBadge("firmware-version-badge", "Manifest:", "/firmware/flash-manifest.json", "firmware_unavailable");
+    updateManifestBadge("firmware-version-s3", "ESP32-S3:", "/firmware/esp32-s3/flash-manifest.json", "firmware_s3_unavailable");
+    updateManifestBadge("firmware-version-c3", "ESP32-C3:", "/firmware/esp32-c3/flash-manifest.json", "firmware_c3_unavailable");
   </script>
 </body>
 </html>

@@ -1,0 +1,23 @@
+{
+  "name": "Lumentree Local BLE Bridge",
+  "version": "0.15.1-exp-c3-4mb",
+  "builds": [
+    {
+      "chipFamily": "ESP32-C3",
+      "parts": [
+        {
+          "path": "bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "lumentree-ble-bridge.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}

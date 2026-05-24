@@ -39,6 +39,9 @@ remote = origin
    Solar dashboard battery-source cleanup and EVN billing-cycle sensors
 10. `docs/status/2026-05-24-esp32-c3-experimental-first-boot.md` for the first
     real `ESP32-C3 4MB` experimental build/flash/boot evidence
+11. `docs/status/2026-05-24-esp32-c3-flash-site-publish.md` for the point
+    where the experimental `ESP32-C3 Super Mini` line became selectable on the
+    flash website
 
 ## Current Baseline
 

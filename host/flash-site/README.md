@@ -1,6 +1,6 @@
 # Lumentree Flash Site
 
-Static WebSerial flash site for the dedicated ESP32-S3 Lumentree firmware.
+Static WebSerial flash site for the Lumentree firmware line.
 
 Default local bind:
 
@@ -31,6 +31,9 @@ Current UX requirements for the public page:
 4. The page must explain that Home Assistant write entities stay read-only
    until the user enters the pairing code in `Lumentree Local` integration
    options.
+5. The page must expose two board choices:
+   - `ESP32-S3` stable
+   - `ESP32-C3 Super Mini` experimental
 
 Refresh firmware artifacts after a new build:
 
@@ -41,30 +44,45 @@ cd /home/mrlinh/esp32-lumentree
 
 ## Firmware Version Sync
 
-Source of truth for the public flash firmware version:
+Source of truth for the public flash firmware versions:
 
 ```text
 firmware/platformio.ini
   -> [env:esp32-s3-8mb-nopsram-release]
   -> LUMENTREE_FIRMWARE_VERSION
+firmware/platformio.ini
+  -> [env:esp32-c3-4mb-experimental]
+  -> LUMENTREE_FIRMWARE_VERSION
 ```
 
 The flash site does not keep its own separate version string. The sync script
-extracts the version from the selected PlatformIO environment and writes it into
-`host/flash-site/public/firmware/flash-manifest.json`.
+extracts the version from the selected PlatformIO environments and writes them
+into:
+
+- `host/flash-site/public/firmware/esp32-s3/flash-manifest.json`
+- `host/flash-site/public/firmware/esp32-c3/flash-manifest.json`
+- `host/flash-site/public/firmware/flash-manifest.json`
+
+For backward compatibility, the legacy flat files under
+`host/flash-site/public/firmware/` are also kept aligned with the stable
+`ESP32-S3` line.
 
 Public firmware release workflow:
 
 1. Update `LUMENTREE_FIRMWARE_VERSION` inside
    `firmware/platformio.ini` for `env:esp32-s3-8mb-nopsram-release`.
-2. Build the release firmware:
+2. Build the release firmware(s):
 
    ```bash
    cd /home/mrlinh/esp32-lumentree/firmware
    pio run -e esp32-s3-8mb-nopsram-release
+   pio run -e esp32-c3-4mb-experimental
    ```
 
-3. Flash and validate on a real ESP32-S3 device before publish.
+3. Flash and validate on real hardware before publish.
+   - `ESP32-S3` remains the stable line.
+   - `ESP32-C3 Super Mini` must stay labeled experimental unless it has passed
+     real runtime validation.
 4. Sync website artifacts:
 
    ```bash
@@ -72,10 +90,12 @@ Public firmware release workflow:
    ./tools/sync_flash_site_artifacts.sh
    ```
 
-5. Verify the public manifest:
+5. Verify the public manifest(s):
 
    ```bash
    curl https://flash-lumentree.jonah.io.vn/firmware/flash-manifest.json
+   curl https://flash-lumentree.jonah.io.vn/firmware/esp32-s3/flash-manifest.json
+   curl https://flash-lumentree.jonah.io.vn/firmware/esp32-c3/flash-manifest.json
    ```
 
 6. Confirm production health from the tested device reports the same firmware

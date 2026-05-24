@@ -36,7 +36,6 @@ firmware releases.
 ### Not supported yet
 
 - `ESP32-S3 4MB`
-- `ESP32-C3 4MB`
 - `classic ESP32 4MB`
 
 Important:
@@ -49,9 +48,30 @@ Important:
 - So the current production firmware does **not** fit the normal `4MB` app slot
   layout.
 
+### Experimental user-selectable target
+
+- `ESP32-C3 Super Mini`
+- `4MB flash`
+- `no PSRAM required`
+
+Current status:
+
+- dedicated target present in codebase: `esp32-c3-4mb-experimental`
+- local flash site now exposes this line as an explicit experimental choice
+- build has succeeded on real hardware
+- real-device validation has already passed:
+  - boot
+  - AP provisioning
+  - Wi-Fi join
+  - LAN portal
+  - BLE candidate flow
+  - telemetry upload
+  - Home Assistant polling through the local server
+- keep this line labeled `experimental` until it has multi-day stability
+  evidence comparable to the stable `ESP32-S3` line
+
 ### Planned experimental targets
 
-- `ESP32-C3`
 - `classic ESP32 4MB`
 
 ### Experimental build target now present in codebase
@@ -63,17 +83,19 @@ What this means:
 
 - the codebase now contains a dedicated `PlatformIO` target and a custom
   `4MB` single-app partition layout
-- this target is for developer testing only
-- it is **not** part of the stable flash site choices yet
-- it is **not** considered supported hardware yet
-- real hardware validation is still required before exposing it to users
+- `esp32-s3-4mb-nopsram-experimental` remains for developer testing only
+- `esp32-c3-4mb-experimental` is now available on the flash site as an
+  explicit experimental board choice
+- neither 4MB line is considered part of the stable support baseline yet
 
 Only after:
 
 - a separate PlatformIO target,
 - a board-specific partition layout,
 - and explicit validation for BLE, Wi-Fi, local portal, upload path, and the
-  guarded write/safety flow.
+  guarded write/safety flow
+
+can a smaller-board line move beyond "experimental".
 
 ## Support Policy
 

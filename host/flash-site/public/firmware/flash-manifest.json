@@ -6,19 +6,36 @@
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "bootloader.bin",
+          "path": "esp32-s3/bootloader.bin",
           "offset": 0
         },
         {
-          "path": "partitions.bin",
+          "path": "esp32-s3/partitions.bin",
           "offset": 32768
         },
         {
-          "path": "boot_app0.bin",
+          "path": "esp32-s3/boot_app0.bin",
           "offset": 57344
         },
         {
-          "path": "lumentree-ble-bridge.bin",
+          "path": "esp32-s3/lumentree-ble-bridge.bin",
+          "offset": 65536
+        }
+      ]
+    },
+    {
+      "chipFamily": "ESP32-C3",
+      "parts": [
+        {
+          "path": "esp32-c3/bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "esp32-c3/partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "esp32-c3/lumentree-ble-bridge.bin",
           "offset": 65536
         }
       ]
