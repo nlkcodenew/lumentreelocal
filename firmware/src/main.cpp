@@ -16,6 +16,9 @@
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
 #include <map>
 #include <vector>
 
@@ -59,6 +62,18 @@
 #ifndef LUMENTREE_DISABLE_TELEMETRY_UPLOADS
 #define LUMENTREE_DISABLE_TELEMETRY_UPLOADS 0
 #endif
+#ifndef LUMENTREE_USE_TELEMETRY_TASK
+#define LUMENTREE_USE_TELEMETRY_TASK 0
+#endif
+#ifndef LUMENTREE_MAIN_TELEMETRY_CHUNK_REGISTERS
+#define LUMENTREE_MAIN_TELEMETRY_CHUNK_REGISTERS 95
+#endif
+#ifndef LUMENTREE_DISABLE_COMMAND_POLLING
+#define LUMENTREE_DISABLE_COMMAND_POLLING 0
+#endif
+#ifndef LUMENTREE_USE_COMMAND_POLL_TASK
+#define LUMENTREE_USE_COMMAND_POLL_TASK 0
+#endif
 
 #ifndef LUMENTREE_FIRMWARE_NAME
 #define LUMENTREE_FIRMWARE_NAME "lumentree-ble-bridge"
@@ -90,6 +105,9 @@ static const unsigned long SETTINGS_UPLOAD_INTERVAL_MS = 60000;
 static const unsigned long STATS_UPLOAD_INTERVAL_MS = 5UL * 60UL * 1000UL;
 static const uint16_t SCHEDULE_STATE_START_REGISTER = 130;
 static const uint16_t SCHEDULE_STATE_REGISTER_COUNT = 47;
+static const uint16_t MAIN_TELEMETRY_TOTAL_REGISTERS = 95;
+static const uint8_t RUNTIME_PROBE_COUNT = 7;
+static const uint8_t RUNTIME_TRACE_SIZE = 16;
 
 static BLEScan* bleScan = nullptr;
 static Preferences prefs;
@@ -115,6 +133,9 @@ static bool productionEnabled = LUMENTREE_DEFAULT_PRODUCTION_ENABLED != 0;
 static bool tlsInsecure = LUMENTREE_DEFAULT_TLS_INSECURE != 0;
 static bool backgroundTelemetryDisabled = LUMENTREE_DISABLE_BACKGROUND_TELEMETRY != 0;
 static bool telemetryUploadsDisabled = LUMENTREE_DISABLE_TELEMETRY_UPLOADS != 0;
+static bool telemetryTaskEnabled = LUMENTREE_USE_TELEMETRY_TASK != 0;
+static bool commandPollingDisabled = LUMENTREE_DISABLE_COMMAND_POLLING != 0;
+static bool commandPollTaskEnabled = LUMENTREE_USE_COMMAND_POLL_TASK != 0;
 static bool provisioningPortalActive = false;
 static bool portalServerStarted = false;
 static bool mdnsStarted = false;
@@ -135,6 +156,7 @@ static unsigned long lastGatewayStatusPostMs = 0;
 static unsigned long lastCommandPollMs = 0;
 static unsigned long lastSettingsUploadMs = 0;
 static unsigned long lastStatsUploadMs = 0;
+static uint16_t nextMainTelemetryStartRegister = 0;
 static volatile bool modbusNotifyReceived = false;
 static volatile unsigned long modbusLastNotifyMs = 0;
 static uint16_t modbusNotifyCount = 0;
@@ -150,6 +172,20 @@ static uint64_t pendingCommandResultId = 0;
 static String pendingCommandResultStatus;
 static String pendingCommandResultError;
 static String pendingCommandResultPayload;
+static SemaphoreHandle_t modbusOperationMutex = nullptr;
+static TaskHandle_t telemetryTaskHandle = nullptr;
+static TaskHandle_t commandPollTaskHandle = nullptr;
+static portMUX_TYPE runtimeProbeMux = portMUX_INITIALIZER_UNLOCKED;
+
+enum RuntimeProbeId : uint8_t {
+  PROBE_LOOP = 0,
+  PROBE_PORTAL = 1,
+  PROBE_COMMAND_POLL = 2,
+  PROBE_WIFI_CONNECT = 3,
+  PROBE_TELEMETRY_UPLOAD = 4,
+  PROBE_BLE_REQUEST = 5,
+  PROBE_TELEMETRY_SCHEDULER = 6,
+};
 
 struct ModbusReadResult {
   bool ok = false;
@@ -194,13 +230,54 @@ struct ScheduleState {
   ScheduleSlotState discharge[4];
 };
 
+struct RuntimeProbe {
+  const char* name = "";
+  uint32_t slowThresholdMs = 0;
+  uint32_t calls = 0;
+  uint32_t slowCalls = 0;
+  uint32_t failures = 0;
+  uint32_t lastDurationMs = 0;
+  uint32_t maxDurationMs = 0;
+  uint32_t lastStartMs = 0;
+  uint32_t lastEndMs = 0;
+  bool inFlight = false;
+};
+
+struct RuntimeTraceEntry {
+  const char* name = "";
+  uint32_t startedMs = 0;
+  uint32_t durationMs = 0;
+  bool ok = false;
+};
+
+static RuntimeProbe makeRuntimeProbe(const char* name, uint32_t slowThresholdMs) {
+  RuntimeProbe probe;
+  probe.name = name;
+  probe.slowThresholdMs = slowThresholdMs;
+  return probe;
+}
+
 static std::vector<BleCandidate> bleCandidates;
 static String pairingStatus = "unconfigured";
 static TelemetrySnapshot latestMainTelemetry;
 static TelemetrySnapshot latestSettingsTelemetry;
 static TelemetrySnapshot latestStatsTelemetry;
+static RuntimeProbe runtimeProbes[RUNTIME_PROBE_COUNT] = {
+  makeRuntimeProbe("loop", 100),
+  makeRuntimeProbe("portal", 50),
+  makeRuntimeProbe("command_poll", 250),
+  makeRuntimeProbe("wifi_connect", 500),
+  makeRuntimeProbe("telemetry_upload", 500),
+  makeRuntimeProbe("ble_request", 500),
+  makeRuntimeProbe("telemetry_scheduler", 250),
+};
+static RuntimeTraceEntry runtimeTrace[RUNTIME_TRACE_SIZE];
+static uint8_t runtimeTraceNextIndex = 0;
+static bool runtimeTraceWrapped = false;
 
 static void addCandidatesJson(JsonArray array);
+static void addRuntimeProbeJson(JsonArray array);
+static void addRuntimeTraceJson(JsonArray array);
 static bool runBleDiscovery(bool allowAutoBind);
 static bool postGatewayCandidates();
 static bool postGatewayStatus(const char* reason);
@@ -223,6 +300,15 @@ static bool ensureModbusSession();
 static void resetModbusSession(const char* reason);
 static void invalidateModbusSession(const char* reason);
 static bool runModbusRequest(const String& commandHex, const char* label, const char* startEventType, const char* requestSafety, const char* responseSafety, ModbusReadResult& result);
+static bool lockModbusOperation(uint32_t timeoutMs);
+static void unlockModbusOperation();
+static void telemetryTaskLoop(void* parameter);
+static void commandPollTaskLoop(void* parameter);
+static uint16_t mainTelemetryChunkRegisterCount();
+static uint16_t mainTelemetryChunkLengthForStart(uint16_t startRegister);
+static void buildMainTelemetryLabel(uint16_t startRegister, uint16_t registerCount, char* buffer, size_t bufferSize);
+static uint32_t beginRuntimeProbe(RuntimeProbeId id);
+static void finishRuntimeProbe(RuntimeProbeId id, uint32_t startedMs, bool ok);
 static void updateTelemetrySnapshot(TelemetrySnapshot& snapshot, const ModbusReadResult& result, uint16_t startRegister, uint16_t registerCount, const char* label, const char* safety);
 static bool flushTelemetrySnapshot(TelemetrySnapshot& snapshot);
 static bool flushOneDirtyTelemetrySnapshot();
@@ -245,6 +331,120 @@ static bool hexToBytes(const String& hex, std::string& out);
 
 static void feedWatchdog() {
   esp_task_wdt_reset();
+}
+
+static bool lockModbusOperation(uint32_t timeoutMs) {
+  if (modbusOperationMutex == nullptr) {
+    return true;
+  }
+  return xSemaphoreTake(modbusOperationMutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
+}
+
+static void unlockModbusOperation() {
+  if (modbusOperationMutex != nullptr) {
+    xSemaphoreGive(modbusOperationMutex);
+  }
+}
+
+static uint32_t beginRuntimeProbe(RuntimeProbeId id) {
+  uint32_t now = millis();
+  portENTER_CRITICAL(&runtimeProbeMux);
+  runtimeProbes[id].lastStartMs = now;
+  runtimeProbes[id].inFlight = true;
+  portEXIT_CRITICAL(&runtimeProbeMux);
+  return now;
+}
+
+static void finishRuntimeProbe(RuntimeProbeId id, uint32_t startedMs, bool ok) {
+  uint32_t now = millis();
+  uint32_t duration = now - startedMs;
+  portENTER_CRITICAL(&runtimeProbeMux);
+  RuntimeProbe& probe = runtimeProbes[id];
+  probe.calls++;
+  if (!ok) {
+    probe.failures++;
+  }
+  if (duration >= probe.slowThresholdMs) {
+    probe.slowCalls++;
+  }
+  probe.lastDurationMs = duration;
+  if (duration > probe.maxDurationMs) {
+    probe.maxDurationMs = duration;
+  }
+  probe.lastEndMs = now;
+  probe.inFlight = false;
+
+  runtimeTrace[runtimeTraceNextIndex].name = probe.name;
+  runtimeTrace[runtimeTraceNextIndex].startedMs = startedMs;
+  runtimeTrace[runtimeTraceNextIndex].durationMs = duration;
+  runtimeTrace[runtimeTraceNextIndex].ok = ok;
+  runtimeTraceNextIndex = (uint8_t)((runtimeTraceNextIndex + 1) % RUNTIME_TRACE_SIZE);
+  if (runtimeTraceNextIndex == 0) {
+    runtimeTraceWrapped = true;
+  }
+  portEXIT_CRITICAL(&runtimeProbeMux);
+}
+
+static void addRuntimeProbeJson(JsonArray array) {
+  portENTER_CRITICAL(&runtimeProbeMux);
+  for (uint8_t i = 0; i < RUNTIME_PROBE_COUNT; i++) {
+    const RuntimeProbe& probe = runtimeProbes[i];
+    JsonObject item = array.add<JsonObject>();
+    item["name"] = probe.name;
+    item["slow_threshold_ms"] = probe.slowThresholdMs;
+    item["calls"] = probe.calls;
+    item["slow_calls"] = probe.slowCalls;
+    item["failures"] = probe.failures;
+    item["last_duration_ms"] = probe.lastDurationMs;
+    item["max_duration_ms"] = probe.maxDurationMs;
+    item["last_start_ms"] = probe.lastStartMs;
+    item["last_end_ms"] = probe.lastEndMs;
+    item["in_flight"] = probe.inFlight;
+  }
+  portEXIT_CRITICAL(&runtimeProbeMux);
+}
+
+static void addRuntimeTraceJson(JsonArray array) {
+  portENTER_CRITICAL(&runtimeProbeMux);
+  uint8_t count = runtimeTraceWrapped ? RUNTIME_TRACE_SIZE : runtimeTraceNextIndex;
+  uint8_t start = runtimeTraceWrapped ? runtimeTraceNextIndex : 0;
+  for (uint8_t i = 0; i < count; i++) {
+    const RuntimeTraceEntry& entry = runtimeTrace[(start + i) % RUNTIME_TRACE_SIZE];
+    if (entry.name == nullptr || strlen(entry.name) == 0) {
+      continue;
+    }
+    JsonObject item = array.add<JsonObject>();
+    item["name"] = entry.name;
+    item["started_ms"] = entry.startedMs;
+    item["duration_ms"] = entry.durationMs;
+    item["ok"] = entry.ok;
+  }
+  portEXIT_CRITICAL(&runtimeProbeMux);
+}
+
+static uint16_t mainTelemetryChunkRegisterCount() {
+  uint16_t configured = (uint16_t)LUMENTREE_MAIN_TELEMETRY_CHUNK_REGISTERS;
+  if (configured < 1) {
+    return 1;
+  }
+  if (configured > MAIN_TELEMETRY_TOTAL_REGISTERS) {
+    return MAIN_TELEMETRY_TOTAL_REGISTERS;
+  }
+  return configured;
+}
+
+static uint16_t mainTelemetryChunkLengthForStart(uint16_t startRegister) {
+  uint16_t chunkSize = mainTelemetryChunkRegisterCount();
+  if (startRegister >= MAIN_TELEMETRY_TOTAL_REGISTERS) {
+    return chunkSize;
+  }
+  uint16_t remaining = MAIN_TELEMETRY_TOTAL_REGISTERS - startRegister;
+  return chunkSize < remaining ? chunkSize : remaining;
+}
+
+static void buildMainTelemetryLabel(uint16_t startRegister, uint16_t registerCount, char* buffer, size_t bufferSize) {
+  uint16_t endRegister = registerCount == 0 ? startRegister : (uint16_t)(startRegister + registerCount - 1);
+  snprintf(buffer, bufferSize, "main_registers_%u_%u", startRegister, endRegister);
 }
 
 static void emitBleSessionEvent(const char* type, const char* reason) {
@@ -435,16 +635,29 @@ static bool runModbusRequest(
   const char* responseSafety,
   ModbusReadResult& result
 ) {
+  uint32_t probeStartedMs = beginRuntimeProbe(PROBE_BLE_REQUEST);
+  if (!lockModbusOperation(10000)) {
+    finishRuntimeProbe(PROBE_BLE_REQUEST, probeStartedMs, false);
+    emitError("modbus_busy", "BLE Modbus lane is busy");
+    return false;
+  }
+
   std::string commandBytes;
   if (!hexToBytes(commandHex, commandBytes)) {
+    unlockModbusOperation();
+    finishRuntimeProbe(PROBE_BLE_REQUEST, probeStartedMs, false);
     emitError("command_build_failed", "could not build Modbus request");
     return false;
   }
   if (!ensureModbusSession()) {
+    unlockModbusOperation();
+    finishRuntimeProbe(PROBE_BLE_REQUEST, probeStartedMs, false);
     return false;
   }
   if (modbusCharacteristic == nullptr) {
     invalidateModbusSession("characteristic_not_ready");
+    unlockModbusOperation();
+    finishRuntimeProbe(PROBE_BLE_REQUEST, probeStartedMs, false);
     return false;
   }
 
@@ -468,7 +681,9 @@ static bool runModbusRequest(
   unsigned long deadline = millis() + 5000;
   while (millis() < deadline) {
     feedWatchdog();
-    handleProvisioningPortal();
+    if (!telemetryTaskEnabled) {
+      handleProvisioningPortal();
+    }
     delay(50);
     if (modbusNotifyReceived && millis() - modbusLastNotifyMs > 600) break;
   }
@@ -488,6 +703,8 @@ static bool runModbusRequest(
     response["notify_count"] = modbusNotifyCount;
     response["safety"] = responseSafety;
     printJson(response);
+    unlockModbusOperation();
+    finishRuntimeProbe(PROBE_BLE_REQUEST, probeStartedMs, true);
     return true;
   }
 
@@ -507,11 +724,15 @@ static bool runModbusRequest(
       readDoc["length"] = value.length();
       readDoc["safety"] = responseSafety;
       printJson(readDoc);
+      unlockModbusOperation();
+      finishRuntimeProbe(PROBE_BLE_REQUEST, probeStartedMs, true);
       return true;
     }
   }
 
   invalidateModbusSession("request_timeout_or_empty_response");
+  unlockModbusOperation();
+  finishRuntimeProbe(PROBE_BLE_REQUEST, probeStartedMs, false);
   return false;
 }
 
@@ -720,6 +941,10 @@ static void emitConfig(const char* type) {
   doc["tls_insecure"] = tlsInsecure;
   doc["background_telemetry_disabled"] = backgroundTelemetryDisabled;
   doc["telemetry_uploads_disabled"] = telemetryUploadsDisabled;
+  doc["telemetry_task_enabled"] = telemetryTaskEnabled;
+  doc["main_telemetry_chunk_registers"] = mainTelemetryChunkRegisterCount();
+  doc["command_polling_disabled"] = commandPollingDisabled;
+  doc["command_poll_task_enabled"] = commandPollTaskEnabled;
   doc["provisioning_portal_active"] = provisioningPortalActive;
   doc["provisioning_ap_ssid"] = provisioningApSsid;
   doc["read_pairing_token_active"] = readPairingTokenExpiresInSeconds() > 0;
@@ -761,6 +986,10 @@ static void emitStatus(const char* type) {
   doc["production_enabled"] = productionEnabled;
   doc["background_telemetry_disabled"] = backgroundTelemetryDisabled;
   doc["telemetry_uploads_disabled"] = telemetryUploadsDisabled;
+  doc["telemetry_task_enabled"] = telemetryTaskEnabled;
+  doc["main_telemetry_chunk_registers"] = mainTelemetryChunkRegisterCount();
+  doc["command_polling_disabled"] = commandPollingDisabled;
+  doc["command_poll_task_enabled"] = commandPollTaskEnabled;
   doc["provisioning_portal_active"] = provisioningPortalActive;
   doc["provisioning_ap_ssid"] = provisioningApSsid;
   doc["read_pairing_token_active"] = readPairingTokenExpiresInSeconds() > 0;
@@ -976,6 +1205,14 @@ static void setupProvisioningWebServer() {
     doc["production_enabled"] = productionEnabled;
     doc["background_telemetry_disabled"] = backgroundTelemetryDisabled;
     doc["telemetry_uploads_disabled"] = telemetryUploadsDisabled;
+    doc["telemetry_task_enabled"] = telemetryTaskEnabled;
+    doc["main_telemetry_chunk_registers"] = mainTelemetryChunkRegisterCount();
+    doc["command_polling_disabled"] = commandPollingDisabled;
+    doc["command_poll_task_enabled"] = commandPollTaskEnabled;
+    JsonArray runtimeProbesJson = doc["runtime_probes"].to<JsonArray>();
+    addRuntimeProbeJson(runtimeProbesJson);
+    JsonArray runtimeTraceJson = doc["runtime_trace"].to<JsonArray>();
+    addRuntimeTraceJson(runtimeTraceJson);
     String body;
     serializeJson(doc, body);
     server.send(200, "application/json", body);
@@ -1183,12 +1420,14 @@ static void startProvisioningPortal(bool apStaMode) {
 }
 
 static void handleProvisioningPortal() {
+  uint32_t probeStartedMs = beginRuntimeProbe(PROBE_PORTAL);
   if (provisioningPortalActive) {
     dnsServer.processNextRequest();
   }
   if (portalServerStarted && (provisioningPortalActive || WiFi.status() == WL_CONNECTED)) {
     server.handleClient();
   }
+  finishRuntimeProbe(PROBE_PORTAL, probeStartedMs, true);
 }
 
 static void stopProvisioningPortal() {
@@ -1207,8 +1446,13 @@ static void stopProvisioningPortal() {
 }
 
 static bool ensureWifiConnected() {
-  if (WiFi.status() == WL_CONNECTED) return true;
+  uint32_t probeStartedMs = beginRuntimeProbe(PROBE_WIFI_CONNECT);
+  if (WiFi.status() == WL_CONNECTED) {
+    finishRuntimeProbe(PROBE_WIFI_CONNECT, probeStartedMs, true);
+    return true;
+  }
   if (wifiSsid.length() == 0) {
+    finishRuntimeProbe(PROBE_WIFI_CONNECT, probeStartedMs, false);
     emitError("wifi_not_configured", "set Wi-Fi with SET_WIFI ssid password");
     if (!provisioningPortalActive) startProvisioningPortal(false);
     return false;
@@ -1238,6 +1482,7 @@ static bool ensureWifiConnected() {
     failed["status"] = WiFi.status();
     printJson(failed);
     if (!provisioningPortalActive) startProvisioningPortal(true);
+    finishRuntimeProbe(PROBE_WIFI_CONNECT, probeStartedMs, false);
     return false;
   }
 
@@ -1252,6 +1497,7 @@ static bool ensureWifiConnected() {
   printJson(done);
   ensureMdnsStarted();
   stopProvisioningPortal();
+  finishRuntimeProbe(PROBE_WIFI_CONNECT, probeStartedMs, true);
   return true;
 }
 
@@ -1264,19 +1510,26 @@ static bool postTelemetry(
   const char* label,
   const char* safety
 ) {
+  uint32_t probeStartedMs = beginRuntimeProbe(PROBE_TELEMETRY_UPLOAD);
   if (apiUrl.length() == 0) {
+    finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
     emitError("api_url_not_configured", "set API URL with SET_API_URL");
     return false;
   }
   if (apiToken.length() == 0) {
+    finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
     emitError("api_token_not_configured", "set API token with SET_API_TOKEN");
     return false;
   }
   if (deviceId.length() == 0) {
+    finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
     emitError("device_id_not_configured", "set device id with SET_DEVICE_ID");
     return false;
   }
-  if (!ensureWifiConnected()) return false;
+  if (!ensureWifiConnected()) {
+    finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
+    return false;
+  }
 
   String endpoint = apiUrl;
   endpoint.trim();
@@ -1324,6 +1577,7 @@ static bool postTelemetry(
     beginOk = http.begin(plainClient, endpoint);
   }
   if (!beginOk) {
+    finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
     emitError("http_begin_failed", "could not initialize HTTP client");
     return false;
   }
@@ -1352,6 +1606,7 @@ static bool postTelemetry(
       postGatewayStatus("telemetry_upload_ok");
     }
   }
+  finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, status >= 200 && status < 300);
   return status >= 200 && status < 300;
 }
 
@@ -2565,16 +2820,34 @@ static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result) 
 }
 
 static void pollPendingCommand() {
-  if (!productionEnabled) return;
-  if (apiUrl.length() == 0 || apiToken.length() == 0 || gatewayId.length() == 0 || deviceId.length() == 0) return;
+  uint32_t probeStartedMs = beginRuntimeProbe(PROBE_COMMAND_POLL);
+  if (commandPollingDisabled) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
+    return;
+  }
+  if (!productionEnabled) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
+    return;
+  }
+  if (apiUrl.length() == 0 || apiToken.length() == 0 || gatewayId.length() == 0 || deviceId.length() == 0) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
+    return;
+  }
   if (pendingCommandResultId != 0) {
     retryPendingCommandResult();
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
     return;
   }
   unsigned long now = millis();
-  if (lastCommandPollMs != 0 && now - lastCommandPollMs < COMMAND_POLL_INTERVAL_MS) return;
+  if (lastCommandPollMs != 0 && now - lastCommandPollMs < COMMAND_POLL_INTERVAL_MS) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
+    return;
+  }
   lastCommandPollMs = now;
-  if (!ensureWifiConnected()) return;
+  if (!ensureWifiConnected()) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
+    return;
+  }
 
   String endpoint = apiUrl;
   endpoint.trim();
@@ -2596,7 +2869,10 @@ static void pollPendingCommand() {
   } else {
     beginOk = http.begin(plainClient, endpoint);
   }
-  if (!beginOk) return;
+  if (!beginOk) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
+    return;
+  }
 
   http.setTimeout(8000);
   http.addHeader("Authorization", "Bearer " + apiToken);
@@ -2613,26 +2889,31 @@ static void pollPendingCommand() {
     log["http_status"] = httpStatus;
     log["response"] = response.substring(0, 300);
     printJson(log);
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
     return;
   }
 
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
     emitError("command_poll_invalid_json", "command poll returned invalid JSON");
     return;
   }
 
   JsonVariant commandValue = doc["command"];
   if (commandValue.isNull()) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
     return;
   }
   if (!commandValue.is<JsonObject>()) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
     emitError("command_poll_invalid_command", "command payload is invalid");
     return;
   }
 
   executeCommand(commandValue.as<JsonObject>());
+  finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
 }
 
 static void emitModbusNotify(BLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify) {
@@ -3267,11 +3548,17 @@ static bool validateScheduleTimeChange(const char* group, int slot, bool isStart
 }
 
 static bool runModbusWriteSingleRegister(uint16_t registerAddress, uint16_t value, const char* label) {
+  if (!lockModbusOperation(10000)) {
+    emitError("modbus_busy", "BLE Modbus lane is busy");
+    return false;
+  }
   if (targetMac.length() == 0) {
+    unlockModbusOperation();
     emitError("target_not_set", "run SET_TARGET before writing BLE Modbus data");
     return false;
   }
   if (!targetAddressTypeKnown) {
+    unlockModbusOperation();
     emitError("address_type_unknown", "scan the target once before writing BLE Modbus data");
     return false;
   }
@@ -3279,6 +3566,7 @@ static bool runModbusWriteSingleRegister(uint16_t registerAddress, uint16_t valu
   String commandHex = buildWriteSingleRegisterCommand(1, registerAddress, value);
   std::string commandBytes;
   if (!hexToBytes(commandHex, commandBytes)) {
+    unlockModbusOperation();
     emitError("command_build_failed", "could not build Modbus write command");
     return false;
   }
@@ -3307,6 +3595,7 @@ static bool runModbusWriteSingleRegister(uint16_t registerAddress, uint16_t valu
 
   bool connected = modbusClient->connect(BLEAddress(targetMac.c_str()), targetAddressType);
   if (!connected) {
+    unlockModbusOperation();
     emitError("gatt_connect_failed", "could not connect to target for BLE Modbus write");
     return false;
   }
@@ -3315,6 +3604,7 @@ static bool runModbusWriteSingleRegister(uint16_t registerAddress, uint16_t valu
   if (service == nullptr) {
     emitError("gatt_service_missing", "FFE0 service not found");
     modbusClient->disconnect();
+    unlockModbusOperation();
     return false;
   }
 
@@ -3322,11 +3612,13 @@ static bool runModbusWriteSingleRegister(uint16_t registerAddress, uint16_t valu
   if (chr == nullptr) {
     emitError("gatt_characteristic_missing", "FFE1 characteristic not found");
     modbusClient->disconnect();
+    unlockModbusOperation();
     return false;
   }
   if (!chr->canWrite() && !chr->canWriteNoResponse()) {
     emitError("gatt_write_missing", "FFE1 cannot carry Modbus write request");
     modbusClient->disconnect();
+    unlockModbusOperation();
     return false;
   }
 
@@ -3355,6 +3647,9 @@ static bool runModbusWriteSingleRegister(uint16_t registerAddress, uint16_t valu
   unsigned long deadline = millis() + 5000;
   while (millis() < deadline) {
     feedWatchdog();
+    if (!telemetryTaskEnabled) {
+      handleProvisioningPortal();
+    }
     delay(50);
     if (modbusNotifyReceived && millis() - modbusLastNotifyMs > 600) break;
   }
@@ -3382,6 +3677,7 @@ static bool runModbusWriteSingleRegister(uint16_t registerAddress, uint16_t valu
   delay(200);
   modbusClient->disconnect();
   delay(500);
+  unlockModbusOperation();
   return responseMatches;
 }
 
@@ -3600,9 +3896,19 @@ static void runWifiScan() {
 }
 
 static void maybeRunTelemetryScheduler() {
-  if (!productionEnabled) return;
-  if (backgroundTelemetryDisabled) return;
-  if (pendingCommandResultId != 0) return;
+  uint32_t probeStartedMs = beginRuntimeProbe(PROBE_TELEMETRY_SCHEDULER);
+  if (!productionEnabled) {
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
+    return;
+  }
+  if (backgroundTelemetryDisabled) {
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
+    return;
+  }
+  if (pendingCommandResultId != 0) {
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
+    return;
+  }
   unsigned long now = millis();
   if (nextUploadMs == 0) {
     nextUploadMs = now + 2000;
@@ -3615,6 +3921,7 @@ static void maybeRunTelemetryScheduler() {
   }
   if (targetMac.length() == 0 && lastAutoDiscoveryMs != 0 && now - lastAutoDiscoveryMs < AUTO_DISCOVERY_RETRY_MS) {
     flushOneDirtyTelemetrySnapshot();
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
     return;
   }
   if (targetMac.length() == 0) {
@@ -3622,26 +3929,36 @@ static void maybeRunTelemetryScheduler() {
     if (!runBleDiscovery(true)) {
       emitError("target_not_paired", "waiting for ESP32 gateway pairing");
       flushOneDirtyTelemetrySnapshot();
+      finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, false);
       return;
     }
   }
 
   if ((long)(now - nextUploadMs) >= 0) {
-    ModbusReadResult result = runModbusRead(0, 95, "main_registers_0_94");
+    uint16_t startRegister = nextMainTelemetryStartRegister;
+    uint16_t registerCount = mainTelemetryChunkLengthForStart(startRegister);
+    char label[48];
+    buildMainTelemetryLabel(startRegister, registerCount, label, sizeof(label));
+    ModbusReadResult result = runModbusRead(startRegister, registerCount, label);
     if (result.ok) {
       updateTelemetrySnapshot(
         latestMainTelemetry,
         result,
-        0,
-        95,
-        "main_registers_0_94",
+        startRegister,
+        registerCount,
+        label,
         "function_03_read_only_no_setting_write"
       );
     } else {
       emitError("ble_read_empty", "no Modbus response payload for main telemetry");
       markTelemetrySnapshotDirty(latestMainTelemetry);
     }
+    nextMainTelemetryStartRegister = (uint16_t)(startRegister + registerCount);
+    if (nextMainTelemetryStartRegister >= MAIN_TELEMETRY_TOTAL_REGISTERS) {
+      nextMainTelemetryStartRegister = 0;
+    }
     nextUploadMs = millis() + telemetryIntervalMs();
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, result.ok);
     return;
   }
 
@@ -3663,6 +3980,7 @@ static void maybeRunTelemetryScheduler() {
       markTelemetrySnapshotDirty(latestSettingsTelemetry);
     }
     nextSettingsPollMs = millis() + SETTINGS_UPLOAD_INTERVAL_MS;
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, settings.ok);
     return;
   }
 
@@ -3684,10 +4002,28 @@ static void maybeRunTelemetryScheduler() {
       markTelemetrySnapshotDirty(latestStatsTelemetry);
     }
     nextStatsPollMs = millis() + STATS_UPLOAD_INTERVAL_MS;
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, stats.ok);
     return;
   }
 
   flushOneDirtyTelemetrySnapshot();
+  finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
+}
+
+static void telemetryTaskLoop(void* parameter) {
+  (void)parameter;
+  for (;;) {
+    maybeRunTelemetryScheduler();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+static void commandPollTaskLoop(void* parameter) {
+  (void)parameter;
+  for (;;) {
+    pollPendingCommand();
+    vTaskDelay(pdMS_TO_TICKS(25));
+  }
 }
 
 static void maybeEmitHeartbeat() {
@@ -3885,6 +4221,7 @@ void setup() {
   delay(500);
   esp_task_wdt_init(WATCHDOG_TIMEOUT_SECONDS, true);
   esp_task_wdt_add(nullptr);
+  modbusOperationMutex = xSemaphoreCreateMutex();
 
   loadConfig();
   if (productionEnabled) {
@@ -3909,17 +4246,44 @@ void setup() {
 
   emitStatus("boot");
   printHelp();
+
+  if (telemetryTaskEnabled) {
+    xTaskCreate(
+      telemetryTaskLoop,
+      "telemetry",
+      8192,
+      nullptr,
+      1,
+      &telemetryTaskHandle
+    );
+  }
+  if (commandPollTaskEnabled) {
+    xTaskCreate(
+      commandPollTaskLoop,
+      "command-poll",
+      8192,
+      nullptr,
+      1,
+      &commandPollTaskHandle
+    );
+  }
 }
 
 void loop() {
+  uint32_t probeStartedMs = beginRuntimeProbe(PROBE_LOOP);
   if (Serial0.available()) {
     String line = Serial0.readStringUntil('\n');
     handleCommand(line);
   }
   handleProvisioningPortal();
-  pollPendingCommand();
-  maybeRunTelemetryScheduler();
+  if (!commandPollingDisabled && !commandPollTaskEnabled) {
+    pollPendingCommand();
+  }
+  if (!telemetryTaskEnabled) {
+    maybeRunTelemetryScheduler();
+  }
   maybeEmitHeartbeat();
   feedWatchdog();
   delay(10);
+  finishRuntimeProbe(PROBE_LOOP, probeStartedMs, true);
 }
