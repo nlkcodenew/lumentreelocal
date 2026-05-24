@@ -42,6 +42,9 @@ remote = origin
 11. `docs/status/2026-05-24-esp32-c3-flash-site-publish.md` for the point
     where the experimental `ESP32-C3 Super Mini` line became selectable on the
     flash website
+12. `docs/status/2026-05-24-session-wrapup-c3-runtime-and-s3-erase.md` for the
+    end-of-session runtime summary: C3 live state, published flash-site
+    outcome, and the fact that the older S3 board was erased without reflash
 
 ## Current Baseline
 
@@ -50,6 +53,11 @@ remote = origin
 - Local API bind: `127.0.0.1:8787`
 - Flash site local bind: `127.0.0.1:8790`
 - Home Assistant domain: `lumentreelocal`
+- Current experimental runtime board after this session:
+  - `ESP32-C3 Super Mini`
+  - gateway `esp32-lumentree-01cc9c`
+  - mDNS `lumentree-cc9c.local`
+  - last confirmed LAN IP `192.168.1.245`
 - Read auth is now live:
   - normal device read endpoints require server token or scoped read/write
     grant
@@ -90,6 +98,9 @@ remote = origin
   - do not delete rows from `lumentree_devices` to unlink a device
   - deleting that row still cascades historical telemetry and energy data
   - current safe reset scope is grants/tokens/candidates only
+- Hardware test caveat after this session:
+  - the older `ESP32-S3` board with MAC `3c:dc:75:63:47:5c` was erased only
+  - it is blank now and does not have firmware on it unless reflashed later
 
 ## Operational Rule
 
