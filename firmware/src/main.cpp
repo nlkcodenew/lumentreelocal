@@ -13,6 +13,8 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
@@ -118,6 +120,8 @@ static const unsigned long WRITE_PAIRING_CODE_TTL_MS = 600000;
 static const unsigned long MAIN_FULL_REFRESH_INTERVAL_MS = LUMENTREE_MAIN_FULL_REFRESH_INTERVAL_MS;
 static const unsigned long SETTINGS_UPLOAD_INTERVAL_MS = LUMENTREE_SETTINGS_POLL_INTERVAL_MS;
 static const unsigned long STATS_UPLOAD_INTERVAL_MS = LUMENTREE_STATS_POLL_INTERVAL_MS;
+static const size_t PORTAL_LOG_CAPACITY = 32;
+static const size_t PORTAL_LOG_LINE_MAX = 256;
 static const uint16_t SCHEDULE_STATE_START_REGISTER = 130;
 static const uint16_t SCHEDULE_STATE_REGISTER_COUNT = 47;
 static const uint16_t MAIN_TELEMETRY_TOTAL_REGISTERS = 95;
@@ -195,6 +199,10 @@ static SemaphoreHandle_t httpOperationMutex = nullptr;
 static TaskHandle_t telemetryTaskHandle = nullptr;
 static TaskHandle_t commandPollTaskHandle = nullptr;
 static portMUX_TYPE runtimeProbeMux = portMUX_INITIALIZER_UNLOCKED;
+static esp_ota_handle_t lanOtaHandle = 0;
+static const esp_partition_t* lanOtaTargetPartition = nullptr;
+static bool lanOtaActive = false;
+static String lanOtaLastError;
 
 enum RuntimeProbeId : uint8_t {
   PROBE_LOOP = 0,
@@ -288,6 +296,11 @@ struct RuntimeTraceEntry {
   bool ok = false;
 };
 
+struct PortalLogEntry {
+  uint32_t capturedMs = 0;
+  char line[PORTAL_LOG_LINE_MAX] = {};
+};
+
 static RuntimeProbe makeRuntimeProbe(const char* name, uint32_t slowThresholdMs) {
   RuntimeProbe probe;
   probe.name = name;
@@ -314,6 +327,9 @@ static RuntimeProbe runtimeProbes[RUNTIME_PROBE_COUNT] = {
 static RuntimeTraceEntry runtimeTrace[RUNTIME_TRACE_SIZE];
 static uint8_t runtimeTraceNextIndex = 0;
 static bool runtimeTraceWrapped = false;
+static PortalLogEntry portalLogs[PORTAL_LOG_CAPACITY];
+static uint8_t portalLogNextIndex = 0;
+static bool portalLogWrapped = false;
 static const MainTelemetryReadRange FAST_MAIN_TELEMETRY_RANGES[] = {
   {11, 14, "fast_main_registers_11_24"},
   {50, 25, "fast_main_registers_50_74"},
@@ -322,6 +338,8 @@ static const MainTelemetryReadRange FAST_MAIN_TELEMETRY_RANGES[] = {
 static void addCandidatesJson(JsonArray array);
 static void addRuntimeProbeJson(JsonArray array);
 static void addRuntimeTraceJson(JsonArray array);
+static void addPortalLogsJson(JsonArray array);
+static void rememberPortalLogLine(const String& line);
 static bool runBleDiscovery(bool allowAutoBind);
 static bool postGatewayCandidates();
 static bool postGatewayStatus(const char* reason);
@@ -350,6 +368,12 @@ static bool lockHttpOperation(uint32_t timeoutMs);
 static void unlockHttpOperation();
 static void telemetryTaskLoop(void* parameter);
 static void commandPollTaskLoop(void* parameter);
+static void handleCommand(String line);
+static bool lanUpdateSupported();
+static bool beginLanFirmwareUpdate(const String& filename, String& error);
+static bool writeLanFirmwareChunk(const uint8_t* data, size_t length, String& error);
+static bool finishLanFirmwareUpdate(size_t totalBytes, String& error);
+static void abortLanFirmwareUpdate(const String& reason);
 static uint16_t mainTelemetryChunkRegisterCount();
 static uint16_t mainTelemetryChunkLengthForStart(uint16_t startRegister);
 static void buildMainTelemetryLabel(uint16_t startRegister, uint16_t registerCount, char* buffer, size_t bufferSize);
@@ -376,7 +400,9 @@ static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result);
 static void maybeAccelerateAfterWriteCommand(const char* status, JsonDocument& result);
 static void modbusNotifyCallback(BLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify);
 static void printJson(JsonDocument& doc);
+static void printLine(const String& line);
 static void emitError(const char* code, const char* message);
+static bool isAllowedLanCommand(const String& line);
 static String bytesToHex(const std::string& data);
 static bool hexToBytes(const String& hex, std::string& out);
 
@@ -483,6 +509,41 @@ static void addRuntimeTraceJson(JsonArray array) {
     item["started_ms"] = entry.startedMs;
     item["duration_ms"] = entry.durationMs;
     item["ok"] = entry.ok;
+  }
+  portEXIT_CRITICAL(&runtimeProbeMux);
+}
+
+static void rememberPortalLogLine(const String& line) {
+  String trimmed = line;
+  trimmed.replace("\r", " ");
+  trimmed.replace("\n", " ");
+  if (trimmed.length() >= PORTAL_LOG_LINE_MAX) {
+    trimmed = trimmed.substring(0, PORTAL_LOG_LINE_MAX - 1);
+  }
+
+  portENTER_CRITICAL(&runtimeProbeMux);
+  portalLogs[portalLogNextIndex].capturedMs = millis();
+  memset(portalLogs[portalLogNextIndex].line, 0, sizeof(portalLogs[portalLogNextIndex].line));
+  strncpy(portalLogs[portalLogNextIndex].line, trimmed.c_str(), PORTAL_LOG_LINE_MAX - 1);
+  portalLogNextIndex = (uint8_t)((portalLogNextIndex + 1) % PORTAL_LOG_CAPACITY);
+  if (portalLogNextIndex == 0) {
+    portalLogWrapped = true;
+  }
+  portEXIT_CRITICAL(&runtimeProbeMux);
+}
+
+static void addPortalLogsJson(JsonArray array) {
+  portENTER_CRITICAL(&runtimeProbeMux);
+  uint8_t count = portalLogWrapped ? PORTAL_LOG_CAPACITY : portalLogNextIndex;
+  uint8_t start = portalLogWrapped ? portalLogNextIndex : 0;
+  for (uint8_t i = 0; i < count; i++) {
+    const PortalLogEntry& entry = portalLogs[(start + i) % PORTAL_LOG_CAPACITY];
+    if (entry.line[0] == '\0') {
+      continue;
+    }
+    JsonObject item = array.add<JsonObject>();
+    item["captured_ms"] = entry.capturedMs;
+    item["line"] = entry.line;
   }
   portEXIT_CRITICAL(&runtimeProbeMux);
 }
@@ -614,6 +675,107 @@ static void resetModbusSession(const char* reason) {
   modbusReconnectFailureCount = 0;
   modbusReconnectBackoffUntilMs = 0;
   emitBleSessionEvent("ble_session_reset", reason);
+}
+
+static const esp_partition_t* findLanAlternatePartition(const esp_partition_t* runningPartition) {
+  const esp_partition_t* factoryPartition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, nullptr);
+  const esp_partition_t* ota0Partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, nullptr);
+  if (factoryPartition == nullptr || ota0Partition == nullptr || runningPartition == nullptr) {
+    return nullptr;
+  }
+  if (runningPartition->subtype == ESP_PARTITION_SUBTYPE_APP_FACTORY) {
+    return ota0Partition;
+  }
+  if (runningPartition->subtype == ESP_PARTITION_SUBTYPE_APP_OTA_0) {
+    return factoryPartition;
+  }
+  return nullptr;
+}
+
+static bool lanUpdateSupported() {
+  const esp_partition_t* runningPartition = esp_ota_get_running_partition();
+  return findLanAlternatePartition(runningPartition) != nullptr;
+}
+
+static bool beginLanFirmwareUpdate(const String& filename, String& error) {
+  error = "";
+  lanOtaLastError = "";
+  if (!filename.endsWith(".bin")) {
+    error = "firmware file must end with .bin";
+    return false;
+  }
+  abortLanFirmwareUpdate("ota_upload_restart");
+  const esp_partition_t* runningPartition = esp_ota_get_running_partition();
+  lanOtaTargetPartition = findLanAlternatePartition(runningPartition);
+  if (lanOtaTargetPartition == nullptr) {
+    error = "lan firmware update unsupported on current partition layout";
+    return false;
+  }
+  esp_err_t err = esp_ota_begin(lanOtaTargetPartition, OTA_SIZE_UNKNOWN, &lanOtaHandle);
+  if (err != ESP_OK) {
+    error = String("esp_ota_begin failed: ") + esp_err_to_name(err);
+    lanOtaHandle = 0;
+    lanOtaTargetPartition = nullptr;
+    return false;
+  }
+  lanOtaActive = true;
+  return true;
+}
+
+static bool writeLanFirmwareChunk(const uint8_t* data, size_t length, String& error) {
+  error = "";
+  if (!lanOtaActive || lanOtaTargetPartition == nullptr) {
+    error = "lan firmware update is not active";
+    return false;
+  }
+  esp_err_t err = esp_ota_write(lanOtaHandle, data, length);
+  if (err != ESP_OK) {
+    error = String("esp_ota_write failed: ") + esp_err_to_name(err);
+    return false;
+  }
+  return true;
+}
+
+static bool finishLanFirmwareUpdate(size_t totalBytes, String& error) {
+  error = "";
+  if (!lanOtaActive || lanOtaTargetPartition == nullptr) {
+    error = "lan firmware update is not active";
+    return false;
+  }
+  esp_err_t err = esp_ota_end(lanOtaHandle);
+  if (err != ESP_OK) {
+    error = String("esp_ota_end failed: ") + esp_err_to_name(err);
+    abortLanFirmwareUpdate(error);
+    return false;
+  }
+  err = esp_ota_set_boot_partition(lanOtaTargetPartition);
+  if (err != ESP_OK) {
+    error = String("esp_ota_set_boot_partition failed: ") + esp_err_to_name(err);
+    abortLanFirmwareUpdate(error);
+    return false;
+  }
+  rememberPortalLogLine(
+    String("ota_upload_ok bytes=") + totalBytes +
+    " target=" + String(lanOtaTargetPartition->label)
+  );
+  lanOtaLastError = "";
+  lanOtaHandle = 0;
+  lanOtaTargetPartition = nullptr;
+  lanOtaActive = false;
+  return true;
+}
+
+static void abortLanFirmwareUpdate(const String& reason) {
+  if (lanOtaActive) {
+    esp_ota_abort(lanOtaHandle);
+  }
+  if (reason.length() > 0) {
+    lanOtaLastError = reason;
+    rememberPortalLogLine(String("ota_upload_failed ") + reason);
+  }
+  lanOtaHandle = 0;
+  lanOtaTargetPartition = nullptr;
+  lanOtaActive = false;
 }
 
 static void invalidateModbusSession(const char* reason) {
@@ -1104,8 +1266,29 @@ static bool runFastMainCacheScheduler(unsigned long now) {
 }
 
 static void printJson(JsonDocument& doc) {
-  serializeJson(doc, Serial0);
-  Serial0.println();
+  String line;
+  serializeJson(doc, line);
+  Serial0.println(line);
+  rememberPortalLogLine(line);
+}
+
+static void printLine(const String& line) {
+  Serial0.println(line);
+  rememberPortalLogLine(line);
+}
+
+static bool isAllowedLanCommand(const String& line) {
+  if (line == "HELP" || line == "STATUS" || line == "CONFIG" || line == "START_AP"
+      || line == "SCAN_WIFI" || line == "SCAN_BLE" || line == "BLE_CANDIDATES"
+      || line == "READ_MAIN_ONCE" || line == "READ_STATS_ONCE" || line == "UPLOAD_ONCE"
+      || line == "READ_CELLS_ONCE") {
+    return true;
+  }
+  return line.startsWith("READ_RANGE ")
+    || line.startsWith("SET_UPLOAD_INTERVAL ")
+    || line.startsWith("SET_PRODUCTION ")
+    || line.startsWith("SET_BACKGROUND_TELEMETRY ")
+    || line.startsWith("SET_TELEMETRY_UPLOADS ");
 }
 
 static void loadConfig() {
@@ -1374,6 +1557,8 @@ static void sendPortalPage() {
       "</b><br><span style='color:#8da0ad'>IP is only a fallback if .local does not resolve on your network.</span></p></section>"
       "<section><div class='actions'><button type='button' onclick='bleScan()'>Scan BLE</button><button type='button' class='secondary' onclick='status()'>Refresh Status</button></div><div id='summary'></div></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>BLE Candidates</h2><div id='ble'></div></section>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>LAN Control</h2><div class='actions'><button type='button' onclick='runCommand(`STATUS`)'>STATUS</button><button type='button' class='secondary' onclick='runCommand(`READ_MAIN_ONCE`)'>READ MAIN</button><button type='button' class='secondary' onclick='readLogs()'>Refresh Logs</button><button type='button' class='secondary' onclick='rebootDevice()'>Reboot</button></div><label>Command</label><input id='cmd' placeholder='READ_RANGE 0 10'><button type='button' onclick='submitCommand()'>Run Command</button></section>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Firmware Update</h2><p>Upload a matching firmware .bin over LAN. This target uses OTA app slots, so the new image is written to the inactive slot and the device reboots into it after a successful upload.</p><input id='fwbin' type='file' accept='.bin'><button type='button' onclick='uploadFirmware()'>Upload Firmware</button></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Read Access</h2><p>Home Assistant setup now requires a read pairing token. Tokens use uppercase letters for display, but they are not case-sensitive.</p><button type='button' onclick='readToken()'>Generate read pairing token</button><div id='read'></div></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Write Access</h2><p>Write remains optional. Only generate a write token when Home Assistant should be allowed to change inverter settings. Tokens use uppercase letters for display, but they are not case-sensitive.</p><button type='button' onclick='writeCode()'>Generate write pairing token</button><div id='write'></div></section>"
     );
@@ -1390,6 +1575,11 @@ static void sendPortalPage() {
     "function renderWrite(d){let w=q('write');if(!w)return;if(!d.write_pairing_code_active){w.innerHTML='<p>No active write pairing token.</p>';return}if(d.write_pairing_code){w.innerHTML=`<p class=\\\"token\\\">${d.write_pairing_code}</p><p>Expires in ${d.write_pairing_code_expires_in_seconds}s. Optional for Home Assistant write access. Uppercase is shown for clarity, but the token is not case-sensitive.</p>`}else{w.innerHTML=`<p>Write pairing token active. Expires in ${d.write_pairing_code_expires_in_seconds}s.</p>`}}"
     "function bleScan(){q('out').textContent='Scanning BLE...';fetch('/api/ble_scan',{method:'POST'}).then(r=>r.json()).then(d=>{renderSummary(d);renderBle(d);q('out').textContent=JSON.stringify(d,null,2)})}"
     "function selectCandidate(deviceId,mac,addressType){q('out').textContent='Binding selected candidate...';fetch('/api/select_candidate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId,mac:mac,address_type:addressType})}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);status()})}"
+    "function runCommand(command){q('out').textContent='Running command...';fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:command})}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);setTimeout(readLogs,500)})}"
+    "function submitCommand(){let command=q('cmd').value.trim();if(!command){return}runCommand(command)}"
+    "function readLogs(){fetch('/api/logs').then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)})}"
+    "function rebootDevice(){q('out').textContent='Rebooting...';fetch('/api/reboot',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)})}"
+    "function uploadFirmware(){let file=q('fwbin').files[0];if(!file){q('out').textContent='Select a .bin file first';return}fetch('/api/status').then(r=>r.json()).then(s=>{if(!s.lan_update_supported){throw new Error('Current firmware layout does not support LAN firmware update on this board')}let data=new FormData();data.append('firmware',file);q('out').textContent='Uploading firmware...';return fetch('/api/update',{method:'POST',body:data})}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)}).catch(e=>{q('out').textContent=String(e)})}"
     "function readToken(){q('out').textContent='Generating read pairing token...';fetch('/api/read_token',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderRead(d)})}"
     "function writeCode(){q('out').textContent='Generating write pairing token...';fetch('/api/write_code',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderWrite(d)})}"
     "function saveWifi(e){e.preventDefault();let data={ssid:q('ssid').value,password:q('pass').value};fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)})}"
@@ -1444,13 +1634,107 @@ static void setupProvisioningWebServer() {
     doc["settings_poll_interval_ms"] = SETTINGS_UPLOAD_INTERVAL_MS;
     doc["command_polling_disabled"] = commandPollingDisabled;
     doc["command_poll_task_enabled"] = commandPollTaskEnabled;
+    doc["lan_update_supported"] = lanUpdateSupported();
     JsonArray runtimeProbesJson = doc["runtime_probes"].to<JsonArray>();
     addRuntimeProbeJson(runtimeProbesJson);
     JsonArray runtimeTraceJson = doc["runtime_trace"].to<JsonArray>();
     addRuntimeTraceJson(runtimeTraceJson);
+    JsonArray portalLogsJson = doc["portal_logs"].to<JsonArray>();
+    addPortalLogsJson(portalLogsJson);
     String body;
     serializeJson(doc, body);
     server.send(200, "application/json", body);
+  });
+
+  server.on("/api/logs", HTTP_GET, []() {
+    JsonDocument doc;
+    doc["ok"] = true;
+    JsonArray logs = doc["logs"].to<JsonArray>();
+    addPortalLogsJson(logs);
+    String body;
+    serializeJson(doc, body);
+    server.send(200, "application/json", body);
+  });
+
+  server.on("/api/command", HTTP_POST, []() {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, server.arg("plain"));
+    if (error) {
+      server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid json\"}");
+      return;
+    }
+    String command = doc["command"] | "";
+    command.trim();
+    if (command.length() == 0) {
+      server.send(400, "application/json", "{\"ok\":false,\"error\":\"command is required\"}");
+      return;
+    }
+    if (!isAllowedLanCommand(command)) {
+      server.send(403, "application/json", "{\"ok\":false,\"error\":\"command not allowed over lan\"}");
+      return;
+    }
+    handleCommand(command);
+    JsonDocument result;
+    result["ok"] = true;
+    result["command"] = command;
+    String body;
+    serializeJson(result, body);
+    server.send(200, "application/json", body);
+  });
+
+  server.on("/api/reboot", HTTP_POST, []() {
+    JsonDocument result;
+    result["ok"] = true;
+    result["rebooting"] = true;
+    result["local_hostname"] = localHostname;
+    result["local_url"] = localPortalUrl();
+    String body;
+    serializeJson(result, body);
+    server.send(200, "application/json", body);
+    delay(500);
+    ESP.restart();
+  });
+
+  server.on("/api/update", HTTP_POST, []() {
+    JsonDocument result;
+    if (!lanOtaActive) {
+      result["ok"] = false;
+      result["error"] = "firmware update failed";
+      if (lanOtaLastError.length() > 0) {
+        result["detail"] = lanOtaLastError;
+      }
+      String body;
+      serializeJson(result, body);
+      server.send(400, "application/json", body);
+      return;
+    }
+    result["ok"] = true;
+    result["rebooting"] = true;
+    String body;
+    serializeJson(result, body);
+    server.send(200, "application/json", body);
+    delay(500);
+    ESP.restart();
+  }, []() {
+    HTTPUpload& upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      String filename = upload.filename;
+      rememberPortalLogLine(String("ota_upload_start ") + filename);
+      String error;
+      if (!beginLanFirmwareUpdate(filename, error)) {
+        abortLanFirmwareUpdate(error);
+      }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      String error;
+      if (!writeLanFirmwareChunk(upload.buf, upload.currentSize, error)) {
+        abortLanFirmwareUpdate(error);
+      }
+    } else if (upload.status == UPLOAD_FILE_END) {
+      String error;
+      finishLanFirmwareUpdate(upload.totalSize, error);
+    } else if (upload.status == UPLOAD_FILE_ABORTED) {
+      abortLanFirmwareUpdate("ota_upload_aborted");
+    }
   });
 
   server.on("/api/write_code", HTTP_POST, []() {
@@ -4056,42 +4340,42 @@ static void runManualReadRange(const String& line) {
 }
 
 static void printHelp() {
-  Serial0.println("# Commands:");
-  Serial0.println("# HELP");
-  Serial0.println("# STATUS");
-  Serial0.println("# CONFIG");
-  Serial0.println("# SET_TARGET aa:bb:cc:dd:ee:ff");
-  Serial0.println("# SET_TARGET_MAC aa:bb:cc:dd:ee:ff");
-  Serial0.println("# CLEAR_TARGET");
-  Serial0.println("# CLEAR_TARGET_MAC");
-  Serial0.println("# SET_ACTIVE 0|1");
-  Serial0.println("# SET_CANDIDATE_ONLY 0|1");
-  Serial0.println("# SET_SCAN seconds interval window [log_limit]");
-  Serial0.println("# SET_WIFI ssid password");
-  Serial0.println("# SET_API_URL https://lumentree.jonah.io.vn");
-  Serial0.println("# SET_API_TOKEN token");
-  Serial0.println("# SET_DEVICE_ID P240819130");
-  Serial0.println("# SET_GATEWAY_ID esp32-lumentree");
-  Serial0.println("# SET_UPLOAD_INTERVAL seconds");
-  Serial0.println("# SET_TLS_INSECURE 0|1");
-  Serial0.println("# SET_PRODUCTION 0|1");
-  Serial0.println("# START_AP");
-  Serial0.println("# WRITE_STATUS");
-  Serial0.println("# GENERATE_WRITE_CODE");
-  Serial0.println("# SCAN_WIFI");
-  Serial0.println("# SCAN_BLE");
-  Serial0.println("# BLE_CANDIDATES");
-  Serial0.println("# SCAN_ONCE");
-  Serial0.println("# DISCOVER_GATT");
-  Serial0.println("# READ_MAIN_ONCE");
-  Serial0.println("# READ_STATS_ONCE");
-  Serial0.println("# READ_RANGE start_register register_count");
-  Serial0.println("# WRITE_TARGET_SOC_144_TO_6 CONFIRM");
-  Serial0.println("# UPLOAD_ONCE");
-  Serial0.println("# READ_CELLS_ONCE");
-  Serial0.println("# Lumentree candidate hints: BLE name contains Device ID, uuid=A018739B-734D-8211-CB80-C9ACD39D13B4, or GATT FFE0/FFE1");
-  Serial0.println("# Safety: READ_MAIN_ONCE/READ_RANGE/READ_CELLS_ONCE use Modbus function 03; READ_STATS_ONCE uses function 04.");
-  Serial0.println("# WRITE_TARGET_SOC_144_TO_6 is a one-off whitelisted function 06 test with pre/post read verification.");
+  printLine("# Commands:");
+  printLine("# HELP");
+  printLine("# STATUS");
+  printLine("# CONFIG");
+  printLine("# SET_TARGET aa:bb:cc:dd:ee:ff");
+  printLine("# SET_TARGET_MAC aa:bb:cc:dd:ee:ff");
+  printLine("# CLEAR_TARGET");
+  printLine("# CLEAR_TARGET_MAC");
+  printLine("# SET_ACTIVE 0|1");
+  printLine("# SET_CANDIDATE_ONLY 0|1");
+  printLine("# SET_SCAN seconds interval window [log_limit]");
+  printLine("# SET_WIFI ssid password");
+  printLine("# SET_API_URL https://lumentree.jonah.io.vn");
+  printLine("# SET_API_TOKEN token");
+  printLine("# SET_DEVICE_ID P240819130");
+  printLine("# SET_GATEWAY_ID esp32-lumentree");
+  printLine("# SET_UPLOAD_INTERVAL seconds");
+  printLine("# SET_TLS_INSECURE 0|1");
+  printLine("# SET_PRODUCTION 0|1");
+  printLine("# START_AP");
+  printLine("# WRITE_STATUS");
+  printLine("# GENERATE_WRITE_CODE");
+  printLine("# SCAN_WIFI");
+  printLine("# SCAN_BLE");
+  printLine("# BLE_CANDIDATES");
+  printLine("# SCAN_ONCE");
+  printLine("# DISCOVER_GATT");
+  printLine("# READ_MAIN_ONCE");
+  printLine("# READ_STATS_ONCE");
+  printLine("# READ_RANGE start_register register_count");
+  printLine("# WRITE_TARGET_SOC_144_TO_6 CONFIRM");
+  printLine("# UPLOAD_ONCE");
+  printLine("# READ_CELLS_ONCE");
+  printLine("# Lumentree candidate hints: BLE name contains Device ID, uuid=A018739B-734D-8211-CB80-C9ACD39D13B4, or GATT FFE0/FFE1");
+  printLine("# Safety: READ_MAIN_ONCE/READ_RANGE/READ_CELLS_ONCE use Modbus function 03; READ_STATS_ONCE uses function 04.");
+  printLine("# WRITE_TARGET_SOC_144_TO_6 is a one-off whitelisted function 06 test with pre/post read verification.");
 }
 
 static void runUploadOnce() {
