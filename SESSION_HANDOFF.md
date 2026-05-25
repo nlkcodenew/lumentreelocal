@@ -60,6 +60,10 @@ remote = origin
     for the recorded next-step direction: move the `ESP32-C3` near the
     inverter, use floor-3 Wi-Fi, and treat OTA as the next operational
     priority with explicit `4MB` flash-layout constraints
+18. `docs/specs/2026-05-25-dual-line-firmware-strategy-c3-lan-update-s3-ota-stable.md`
+    for the formal two-line firmware strategy: `ESP32-C3` first with LAN
+    update after relocation, then `ESP32-S3` as the OTA-stable line after
+    runtime uplift
 
 ## Current Baseline
 
