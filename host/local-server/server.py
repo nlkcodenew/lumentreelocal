@@ -11,6 +11,7 @@ import json
 import os
 import secrets
 import sys
+import socket
 from datetime import date, datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -2320,13 +2321,21 @@ def make_handler(app: LumentreeServer):
     def log_message(self, fmt: str, *args: Any) -> None:
       print("%s - %s" % (self.address_string(), fmt % args), file=sys.stderr)
 
-    def send_json(self, status: int, payload: dict[str, Any]) -> None:
+    def send_json(self, status: int, payload: dict[str, Any]) -> bool:
       body = json.dumps(payload, default=json_default, separators=(",", ":")).encode("utf-8")
-      self.send_response(status)
-      self.send_header("Content-Type", "application/json")
-      self.send_header("Content-Length", str(len(body)))
-      self.end_headers()
-      self.wfile.write(body)
+      try:
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return True
+      except (BrokenPipeError, ConnectionResetError, socket.timeout) as exc:
+        print(
+          f"{self.address_string()} - client disconnected while sending response: {exc}",
+          file=sys.stderr,
+        )
+        return False
 
     def read_json(self) -> dict[str, Any]:
       length = int(self.headers.get("Content-Length", "0"))
@@ -2499,6 +2508,8 @@ def make_handler(app: LumentreeServer):
           return
 
         self.send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not found"})
+      except (BrokenPipeError, ConnectionResetError, socket.timeout):
+        return
       except Exception as exc:
         self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": str(exc)})
 
@@ -2599,6 +2610,8 @@ def make_handler(app: LumentreeServer):
         self.send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(exc)})
       except PermissionError as exc:
         self.send_json(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": str(exc)})
+      except (BrokenPipeError, ConnectionResetError, socket.timeout):
+        return
       except Exception as exc:
         self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": str(exc)})
 

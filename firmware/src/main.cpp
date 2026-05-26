@@ -111,6 +111,7 @@ static const unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
 static const uint16_t PROVISIONING_DNS_PORT = 53;
 static const uint32_t WATCHDOG_TIMEOUT_SECONDS = 60;
 static const unsigned long HEARTBEAT_INTERVAL_MS = 300000;
+static const unsigned long HTTP_STARTUP_QUIET_MS = 30000;
 static const unsigned long AUTO_DISCOVERY_RETRY_MS = 60000;
 static const unsigned long COMMAND_POLL_INTERVAL_MS = 10000;
 static const unsigned long FAST_TELEMETRY_INTERVAL_MS = 5000;
@@ -357,6 +358,7 @@ static bool lockModbusOperation(uint32_t timeoutMs);
 static void unlockModbusOperation();
 static bool lockHttpOperation(uint32_t timeoutMs);
 static void unlockHttpOperation();
+static bool httpStartupQuietElapsed(unsigned long now);
 static void telemetryTaskLoop(void* parameter);
 static void commandPollTaskLoop(void* parameter);
 static void handleCommand(String line);
@@ -434,6 +436,10 @@ static void unlockHttpOperation() {
   if (httpOperationMutex != nullptr) {
     xSemaphoreGive(httpOperationMutex);
   }
+}
+
+static bool httpStartupQuietElapsed(unsigned long now) {
+  return now >= HTTP_STARTUP_QUIET_MS;
 }
 
 static uint32_t beginRuntimeProbe(RuntimeProbeId id) {
@@ -2256,7 +2262,10 @@ static bool postTelemetry(
   if (status >= 200 && status < 300) {
     pairingStatus = "paired";
     unsigned long now = millis();
-    if (lastGatewayStatusPostMs == 0 || now - lastGatewayStatusPostMs >= HEARTBEAT_INTERVAL_MS) {
+    if (
+      httpStartupQuietElapsed(now)
+      && (lastGatewayStatusPostMs == 0 || now - lastGatewayStatusPostMs >= HEARTBEAT_INTERVAL_MS)
+    ) {
       postGatewayStatus("telemetry_upload_ok");
     }
   }
@@ -2307,6 +2316,8 @@ static bool uploadSettingsSnapshotNow(const char* reason) {
 static bool postGatewayStatus(const char* reason) {
   if (apiUrl.length() == 0 || apiToken.length() == 0 || gatewayId.length() == 0) return false;
   if (!ensureWifiConnected()) return false;
+  unsigned long now = millis();
+  if (!httpStartupQuietElapsed(now)) return false;
 
   String endpoint = apiUrl;
   endpoint.trim();
@@ -3551,6 +3562,10 @@ static void pollPendingCommand() {
     return;
   }
   unsigned long now = millis();
+  if (!httpStartupQuietElapsed(now)) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
+    return;
+  }
   if (lastCommandPollMs != 0 && now - lastCommandPollMs < COMMAND_POLL_INTERVAL_MS) {
     finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
     return;
