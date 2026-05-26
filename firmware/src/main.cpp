@@ -1286,6 +1286,9 @@ static bool isAllowedLanCommand(const String& line) {
   }
   return line.startsWith("READ_RANGE ")
     || line.startsWith("SET_UPLOAD_INTERVAL ")
+    || line.startsWith("SET_DEVICE_ID ")
+    || line.startsWith("SET_TARGET_MAC ")
+    || line.startsWith("SET_WIFI ")
     || line.startsWith("SET_PRODUCTION ")
     || line.startsWith("SET_BACKGROUND_TELEMETRY ")
     || line.startsWith("SET_TELEMETRY_UPLOADS ");
