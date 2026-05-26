@@ -46,6 +46,19 @@ class LumentreeLocalApiClient:
             headers["Authorization"] = f"Bearer {effective_token}"
         return headers
 
+    @staticmethod
+    def _summarize_error_text(text: str) -> str:
+        """Collapse huge HTML/proxy failures into a short readable message."""
+        compact = " ".join(text.split())
+        if not compact:
+            return ""
+        lowered = compact.lower()
+        if "<html" in lowered and "bad gateway" in lowered:
+            return "bad gateway HTML response"
+        if len(compact) > 200:
+            return compact[:200].rstrip() + "..."
+        return compact
+
     async def _get(self, path: str, token: str | None = None) -> dict[str, Any]:
         url = f"{self._api_url}{path}"
         try:
@@ -54,10 +67,14 @@ class LumentreeLocalApiClient:
                     raise LumentreeLocalAuthError("invalid API token")
                 if response.status == 404:
                     text = await response.text()
-                    raise LumentreeLocalNotFoundError(f"GET {path} failed: 404 {text}")
+                    raise LumentreeLocalNotFoundError(
+                        f"GET {path} failed: 404 {self._summarize_error_text(text)}"
+                    )
                 if response.status >= 400:
                     text = await response.text()
-                    raise LumentreeLocalApiError(f"GET {path} failed: {response.status} {text}")
+                    raise LumentreeLocalApiError(
+                        f"GET {path} failed: {response.status} {self._summarize_error_text(text)}"
+                    )
                 data = await response.json()
         except LumentreeLocalApiError:
             raise
@@ -76,10 +93,14 @@ class LumentreeLocalApiClient:
                     raise LumentreeLocalAuthError("invalid API token")
                 if response.status == 404:
                     text = await response.text()
-                    raise LumentreeLocalNotFoundError(f"POST {path} failed: 404 {text}")
+                    raise LumentreeLocalNotFoundError(
+                        f"POST {path} failed: 404 {self._summarize_error_text(text)}"
+                    )
                 if response.status >= 400:
                     text = await response.text()
-                    raise LumentreeLocalApiError(f"POST {path} failed: {response.status} {text}")
+                    raise LumentreeLocalApiError(
+                        f"POST {path} failed: {response.status} {self._summarize_error_text(text)}"
+                    )
                 data = await response.json()
         except LumentreeLocalApiError:
             raise

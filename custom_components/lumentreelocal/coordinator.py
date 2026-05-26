@@ -21,6 +21,7 @@ ENERGY_REFRESH_SECONDS = 60.0
 SETTINGS_REFRESH_SECONDS = 300.0
 WRITE_GRANT_REFRESH_SECONDS = 60.0
 COMMAND_STATUS_REFRESH_SECONDS = 15.0
+FALLBACK_WARNING_INTERVAL_SECONDS = 900.0
 
 
 class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -43,6 +44,7 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_pairing_status: str | None = None
         self._aux_cache: dict[str, dict[str, Any]] = {}
         self._last_fetch_error: str | None = None
+        self._last_warning_at: dict[str, float] = {}
 
     async def _async_update_data(self) -> dict[str, Any]:
         latest = await self._fetch_latest_resilient()
@@ -95,7 +97,9 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             previous = self.data if isinstance(self.data, dict) else None
             if previous:
                 self._last_fetch_error = str(err)
-                LOGGER.warning(
+                self._log_fallback(
+                    f"latest:{type(err).__name__}",
+                    "warning",
                     "Latest telemetry fetch failed for %s; keeping previous snapshot: %s",
                     self.device_id,
                     err,
@@ -126,7 +130,9 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except LumentreeLocalApiError as err:
             cached = self._cached_value(cache_key)
             if isinstance(cached, dict):
-                LOGGER.warning(
+                self._log_fallback(
+                    f"required:{cache_key}:{type(err).__name__}",
+                    "warning",
                     "Required %s fetch failed for %s; keeping cached data: %s",
                     cache_key,
                     self.device_id,
@@ -136,14 +142,18 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if isinstance(self.data, dict):
                 previous = self.data.get(cache_key)
                 if isinstance(previous, dict):
-                    LOGGER.warning(
+                    self._log_fallback(
+                        f"required_previous:{cache_key}:{type(err).__name__}",
+                        "warning",
                         "Required %s fetch failed for %s; reusing previous coordinator data: %s",
                         cache_key,
                         self.device_id,
                         err,
                     )
                     return previous
-            LOGGER.warning(
+            self._log_fallback(
+                f"required_default:{cache_key}:{type(err).__name__}",
+                "warning",
                 "Required %s fetch failed for %s; falling back to default payload: %s",
                 cache_key,
                 self.device_id,
@@ -186,7 +196,9 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 raise
         except LumentreeLocalApiError as err:
             if isinstance(cached, dict):
-                LOGGER.warning(
+                self._log_fallback(
+                    f"optional:{cache_key}:{type(err).__name__}",
+                    "warning",
                     "Optional %s fetch failed for %s; keeping cached data: %s",
                     cache_key,
                     self.device_id,
@@ -196,14 +208,18 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if isinstance(self.data, dict):
                 previous = self.data.get(cache_key)
                 if isinstance(previous, dict):
-                    LOGGER.warning(
+                    self._log_fallback(
+                        f"optional_previous:{cache_key}:{type(err).__name__}",
+                        "warning",
                         "Optional %s fetch failed for %s; reusing previous coordinator data: %s",
                         cache_key,
                         self.device_id,
                         err,
                     )
                     return previous
-            LOGGER.warning(
+            self._log_fallback(
+                f"optional_default:{cache_key}:{type(err).__name__}",
+                "warning",
                 "Optional %s fetch failed for %s; falling back to default payload: %s",
                 cache_key,
                 self.device_id,
@@ -240,6 +256,16 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "fetched_at": monotonic(),
             "value": value,
         }
+
+    def _log_fallback(self, warning_key: str, level: str, message: str, *args: Any) -> None:
+        """Emit one warning per interval, then downgrade repeats to debug."""
+        now = monotonic()
+        last = self._last_warning_at.get(warning_key)
+        if last is None or now - last >= FALLBACK_WARNING_INTERVAL_SECONDS:
+            self._last_warning_at[warning_key] = now
+            getattr(LOGGER, level)(message, *args)
+            return
+        LOGGER.debug(message, *args)
 
     def _adjust_update_interval(self, command_status: dict[str, Any] | None) -> None:
         """Speed up polling while a write command is still pending."""

@@ -25,6 +25,7 @@ import pexpect
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = REPO_ROOT / "custom_components" / "lumentreelocal"
 HAOS_COMPONENT_DIR = Path("/mnt/data/supervisor/homeassistant/custom_components/lumentreelocal")
+HAOS_BACKUP_ROOT = Path("/mnt/data/supervisor/homeassistant/.component_backups")
 DEFAULT_VM_NAME = "HAOS"
 
 
@@ -91,7 +92,7 @@ def send_root_command(console: pexpect.spawn, command: str, timeout: int = 60) -
 
 def deploy_archive_via_console(vm_name: str, archive_b64: str, skip_restart: bool) -> str:
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_dir = f"{HAOS_COMPONENT_DIR}.bak-{timestamp}"
+    backup_dir = str(HAOS_BACKUP_ROOT / f"lumentreelocal-{timestamp}")
     temp_b64 = "/tmp/lumentreelocal.tar.gz.b64"
     temp_tgz = "/tmp/lumentreelocal.tar.gz"
 
@@ -116,6 +117,7 @@ def deploy_archive_via_console(vm_name: str, archive_b64: str, skip_restart: boo
 
         send_root_command(console, f"base64 -d {temp_b64} > {temp_tgz}", timeout=60)
         send_root_command(console, f"mkdir -p {HAOS_COMPONENT_DIR.parent}", timeout=30)
+        send_root_command(console, f"mkdir -p {HAOS_BACKUP_ROOT}", timeout=30)
         send_root_command(
             console,
             (
