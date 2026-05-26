@@ -64,7 +64,10 @@ remote = origin
     for the formal two-line firmware strategy: `ESP32-C3` first with LAN
     update after relocation, then `ESP32-S3` as the OTA-stable line after
     runtime uplift
-19. `AGENTS.md`
+19. `docs/status/2026-05-26-ha-local-origin-vs-cloudflare-guidance.md`
+    for the current HA networking rule: prefer local origin for HA polling and
+    treat Cloudflare as remote-access infrastructure, not the default HA path
+20. `AGENTS.md`
     for the current operational rules around `ESP32-C3` LAN control, NVS config
     storage, telemetry-stall recovery, and the current OTA/LAN-update limits
 
@@ -73,6 +76,8 @@ remote = origin
 - Private runtime branch HEAD should be checked with `git whereami`
 - Production API: `https://lumentree.jonah.io.vn`
 - Local API bind: `127.0.0.1:8787`
+- Preferred HA polling path should be the local origin rather than the public
+  Cloudflare hostname whenever HA can reach the Ubuntu host directly
 - Flash site local bind: `127.0.0.1:8790`
 - Home Assistant domain: `lumentreelocal`
 - Current experimental runtime board after this session:

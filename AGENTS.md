@@ -82,3 +82,32 @@
 - `LAN firmware update` UI/API exists conceptually, but it is still not a
   supported operational path on `ESP32-C3 4MB` because tested dual-slot layouts
   boot-looped on real hardware.
+
+## HA Routing Rule
+
+- For Home Assistant polling, prefer `HA -> local origin` over
+  `HA -> Cloudflare public hostname`.
+- The current local origin is `http://127.0.0.1:8787` on the Ubuntu host, and
+  the public hostname `https://lumentree.jonah.io.vn` should be treated as the
+  remote-access path, not the preferred HA-internal path.
+- A real observed failure mode is:
+  - the local server stays healthy and keeps returning `200/201`
+  - `ESP32-C3` keeps uploading telemetry normally
+  - but Home Assistant logs intermittent `530/502` or
+    `cannot connect to local Lumentree server`
+  - the warning turns out to be on the public/tunnel/proxy path rather than in
+    BLE, firmware, or Postgres
+- This means future sessions should verify tunnel/public reachability before
+  blaming the board, BLE cadence, or the local origin.
+
+## Safe Direction For HA Networking
+
+- The stable architecture going forward is:
+  - `ESP32 -> local server/Postgres`
+  - `Home Assistant -> local server origin`
+  - `remote browser/user -> Cloudflare hostname`
+- Do not make Home Assistant depend on Cloudflare tunnel health if the local
+  origin is available.
+- Do not widen this into a larger auth or server refactor unless the user asks.
+- Keep bearer-token auth on the local API; changing HA routing from public to
+  local origin is an operational hardening step, not a security rollback.
