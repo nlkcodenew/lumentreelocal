@@ -64,6 +64,9 @@ remote = origin
     for the formal two-line firmware strategy: `ESP32-C3` first with LAN
     update after relocation, then `ESP32-S3` as the OTA-stable line after
     runtime uplift
+19. `AGENTS.md`
+    for the current operational rules around `ESP32-C3` LAN control, NVS config
+    storage, telemetry-stall recovery, and the current OTA/LAN-update limits
 
 ## Current Baseline
 
@@ -127,6 +130,30 @@ remote = origin
     recommended runtime
   - exact rollback instructions are recorded in
     `docs/status/2026-05-24-c3-persistent-ble-refactor-rollout-and-rollback.md`
+- Current remote-control capability on the live `ESP32-C3`:
+  - `GET /api/status`
+  - `GET /api/logs`
+  - `POST /api/reboot`
+  - `POST /api/command`
+  - `POST /api/configure`
+  - `POST /api/ble_connection`
+- Current live semantics:
+  - local config is stored on the board in `NVS` via `Preferences`
+  - Wi-Fi/device identity/target MAC no longer require AP-mode access for
+    normal changes if the board is reachable on LAN
+  - BLE can now be disabled and re-enabled independently of Wi-Fi/local web
+  - `LAN firmware update` is still not an accepted operational path on the
+    `ESP32-C3 4MB` line because tested dual-slot layouts boot-looped on real
+    hardware
+- Current `ESP32-C3` live recovery baseline after latest flash/recovery:
+  - LAN reachable at `192.168.1.245`
+  - `device_id = P240819130`
+  - `target_mac = d8:13:2a:ee:58:d6`
+  - telemetry was re-confirmed healthy with:
+    - `main_telemetry_cache_valid = true`
+    - `main_telemetry_cache_valid_registers = 95`
+    - `telemetry_upload.last_http_status = 201`
+    - `telemetry_upload.failures = 0`
 
 ## Operational Rule
 

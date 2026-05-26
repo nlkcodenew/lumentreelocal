@@ -25,16 +25,51 @@
 ## LAN-Only Recovery Reminder
 
 - If the `ESP32-C3` is no longer on USB but still reachable on LAN, the current
-  firmware already exposes one practical remote recovery path:
-  - `POST /api/save` on the local portal triggers `ESP.restart()`
-  - this works even for same/no-op Wi-Fi config payloads because the handler
-    always responds with `rebooting=true` and then restarts
-- The local portal also has:
+  firmware already exposes practical remote recovery and control paths:
+  - `POST /api/reboot` for a direct reboot
   - `POST /api/ble_scan`
   - `POST /api/select_candidate`
+  - `GET /api/logs`
+  - `POST /api/command`
+  - `POST /api/configure`
+  - `POST /api/ble_connection`
 - Re-selecting a known candidate resets the Modbus session via
   `resetModbusSession("portal_candidate_selected")`, which is a lighter-weight
   recovery step than full reboot when BLE telemetry appears stuck.
+
+## Config Storage Rule
+
+- The current `ESP32-C3` runtime stores local operational config in `NVS`
+  through `Preferences` namespace `lumentree`, not in Postgres.
+- This includes:
+  - `wifi_ssid`
+  - `wifi_pass`
+  - `device_id`
+  - `target_mac`
+  - `api_url`
+  - `api_token`
+  - `gateway_id`
+  - `ble_en`
+- Server/Postgres holds backend data like telemetry, events, and command state,
+  but not the board's local boot/runtime config.
+
+## LAN Control Rule
+
+- Current private runtime line now supports structured LAN configuration without
+  AP-mode onboarding for normal maintenance:
+  - `POST /api/configure` can change `ssid`, `password`, `device_id`,
+    `target_mac`, `api_url`, `api_token`, `gateway_id`, and
+    `production_enabled`
+  - `POST /api/ble_connection` can disable or re-enable BLE reads to the
+    inverter without taking down Wi-Fi or local web
+- The local portal in STA mode now includes:
+  - Wi-Fi config form
+  - BLE enable/disable buttons
+  - log viewer
+  - command runner
+- This means future sessions should prefer LAN control first, and only fall
+  back to AP mode or USB when the board is unreachable on LAN or needs a full
+  reflash.
 
 ## Placement / OTA Direction
 
@@ -44,3 +79,6 @@
   - then prioritize OTA design because the board will be harder to reach
 - For `ESP32-C3 4MB`, safe dual-slot OTA is still blocked by current firmware
   size and partition layout, so do not assume OTA is already solved.
+- `LAN firmware update` UI/API exists conceptually, but it is still not a
+  supported operational path on `ESP32-C3 4MB` because tested dual-slot layouts
+  boot-looped on real hardware.
