@@ -4794,7 +4794,7 @@ static void telemetryTaskLoop(void* parameter) {
   (void)parameter;
   for (;;) {
     maybeRunTelemetryScheduler();
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(25));
   }
 }
 
@@ -4802,7 +4802,7 @@ static void commandPollTaskLoop(void* parameter) {
   (void)parameter;
   for (;;) {
     pollPendingCommand();
-    vTaskDelay(pdMS_TO_TICKS(25));
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
