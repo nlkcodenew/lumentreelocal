@@ -13,8 +13,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <esp_ota_ops.h>
-#include <esp_partition.h>
+#include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
@@ -113,15 +112,17 @@ static const uint16_t PROVISIONING_DNS_PORT = 53;
 static const uint32_t WATCHDOG_TIMEOUT_SECONDS = 60;
 static const unsigned long HEARTBEAT_INTERVAL_MS = 300000;
 static const unsigned long AUTO_DISCOVERY_RETRY_MS = 60000;
-static const unsigned long COMMAND_POLL_INTERVAL_MS = 5000;
+static const unsigned long COMMAND_POLL_INTERVAL_MS = 10000;
+static const unsigned long FAST_TELEMETRY_INTERVAL_MS = 5000;
 static const unsigned long TELEMETRY_UPLOAD_RETRY_BACKOFF_MS = 2000;
+static const unsigned long HTTPS_MIN_GAP_MS = 2500;
+static const unsigned long TELEMETRY_BLE_GAP_MS = 1500;
+static const unsigned long WRITE_LANE_RESUME_DELAY_MS = 8000;
 static const uint32_t HTTP_BUSY_SKIP_TIMEOUT_MS = 25;
 static const unsigned long WRITE_PAIRING_CODE_TTL_MS = 600000;
-static const unsigned long MAIN_FULL_REFRESH_INTERVAL_MS = LUMENTREE_MAIN_FULL_REFRESH_INTERVAL_MS;
-static const unsigned long SETTINGS_UPLOAD_INTERVAL_MS = LUMENTREE_SETTINGS_POLL_INTERVAL_MS;
-static const unsigned long STATS_UPLOAD_INTERVAL_MS = LUMENTREE_STATS_POLL_INTERVAL_MS;
-static const size_t PORTAL_LOG_CAPACITY = 32;
-static const size_t PORTAL_LOG_LINE_MAX = 256;
+static const unsigned long MAIN_FULL_REFRESH_INTERVAL_MS = 300000UL;
+static const unsigned long SETTINGS_UPLOAD_INTERVAL_MS = 900000UL;
+static const unsigned long STATS_UPLOAD_INTERVAL_MS = 1800000UL;
 static const uint16_t SCHEDULE_STATE_START_REGISTER = 130;
 static const uint16_t SCHEDULE_STATE_REGISTER_COUNT = 47;
 static const uint16_t MAIN_TELEMETRY_TOTAL_REGISTERS = 95;
@@ -179,6 +180,9 @@ static unsigned long lastSettingsUploadMs = 0;
 static unsigned long lastStatsUploadMs = 0;
 static unsigned long nextDirtyTelemetryFlushRetryMs = 0;
 static unsigned long nextMainFullRefreshMs = 0;
+static unsigned long lastHttpsAttemptMs = 0;
+static unsigned long lastBleTelemetryActionMs = 0;
+static unsigned long telemetryResumeAfterWriteMs = 0;
 static uint16_t nextMainTelemetryStartRegister = 0;
 static volatile bool modbusNotifyReceived = false;
 static volatile unsigned long modbusLastNotifyMs = 0;
@@ -200,11 +204,7 @@ static SemaphoreHandle_t httpOperationMutex = nullptr;
 static TaskHandle_t telemetryTaskHandle = nullptr;
 static TaskHandle_t commandPollTaskHandle = nullptr;
 static portMUX_TYPE runtimeProbeMux = portMUX_INITIALIZER_UNLOCKED;
-static esp_ota_handle_t lanOtaHandle = 0;
-static const esp_partition_t* lanOtaTargetPartition = nullptr;
-static bool lanOtaActive = false;
-static String lanOtaLastError;
-
+static volatile bool writeLaneActive = false;
 enum RuntimeProbeId : uint8_t {
   PROBE_LOOP = 0,
   PROBE_PORTAL = 1,
@@ -297,11 +297,6 @@ struct RuntimeTraceEntry {
   bool ok = false;
 };
 
-struct PortalLogEntry {
-  uint32_t capturedMs = 0;
-  char line[PORTAL_LOG_LINE_MAX] = {};
-};
-
 static RuntimeProbe makeRuntimeProbe(const char* name, uint32_t slowThresholdMs) {
   RuntimeProbe probe;
   probe.name = name;
@@ -328,9 +323,6 @@ static RuntimeProbe runtimeProbes[RUNTIME_PROBE_COUNT] = {
 static RuntimeTraceEntry runtimeTrace[RUNTIME_TRACE_SIZE];
 static uint8_t runtimeTraceNextIndex = 0;
 static bool runtimeTraceWrapped = false;
-static PortalLogEntry portalLogs[PORTAL_LOG_CAPACITY];
-static uint8_t portalLogNextIndex = 0;
-static bool portalLogWrapped = false;
 static const MainTelemetryReadRange FAST_MAIN_TELEMETRY_RANGES[] = {
   {11, 14, "fast_main_registers_11_24"},
   {50, 25, "fast_main_registers_50_74"},
@@ -339,8 +331,6 @@ static const MainTelemetryReadRange FAST_MAIN_TELEMETRY_RANGES[] = {
 static void addCandidatesJson(JsonArray array);
 static void addRuntimeProbeJson(JsonArray array);
 static void addRuntimeTraceJson(JsonArray array);
-static void addPortalLogsJson(JsonArray array);
-static void rememberPortalLogLine(const String& line);
 static bool runBleDiscovery(bool allowAutoBind);
 static bool postGatewayCandidates();
 static bool postGatewayStatus(const char* reason);
@@ -383,11 +373,6 @@ static bool applyLanConfig(
   String& error
 );
 static void setBleConnectionEnabled(bool enabled, const char* reason);
-static bool lanUpdateSupported();
-static bool beginLanFirmwareUpdate(const String& filename, String& error);
-static bool writeLanFirmwareChunk(const uint8_t* data, size_t length, String& error);
-static bool finishLanFirmwareUpdate(size_t totalBytes, String& error);
-static void abortLanFirmwareUpdate(const String& reason);
 static uint16_t mainTelemetryChunkRegisterCount();
 static uint16_t mainTelemetryChunkLengthForStart(uint16_t startRegister);
 static void buildMainTelemetryLabel(uint16_t startRegister, uint16_t registerCount, char* buffer, size_t bufferSize);
@@ -414,6 +399,7 @@ static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result);
 static void maybeAccelerateAfterWriteCommand(const char* status, JsonDocument& result);
 static void modbusNotifyCallback(BLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify);
 static void printJson(JsonDocument& doc);
+static void emitHttpClientDiag(const char* lane, const char* phase, const String& endpoint, int httpStatus, size_t bodyLength);
 static void printLine(const String& line);
 static void emitError(const char* code, const char* message);
 static bool isAllowedLanCommand(const String& line);
@@ -527,41 +513,6 @@ static void addRuntimeTraceJson(JsonArray array) {
   portEXIT_CRITICAL(&runtimeProbeMux);
 }
 
-static void rememberPortalLogLine(const String& line) {
-  String trimmed = line;
-  trimmed.replace("\r", " ");
-  trimmed.replace("\n", " ");
-  if (trimmed.length() >= PORTAL_LOG_LINE_MAX) {
-    trimmed = trimmed.substring(0, PORTAL_LOG_LINE_MAX - 1);
-  }
-
-  portENTER_CRITICAL(&runtimeProbeMux);
-  portalLogs[portalLogNextIndex].capturedMs = millis();
-  memset(portalLogs[portalLogNextIndex].line, 0, sizeof(portalLogs[portalLogNextIndex].line));
-  strncpy(portalLogs[portalLogNextIndex].line, trimmed.c_str(), PORTAL_LOG_LINE_MAX - 1);
-  portalLogNextIndex = (uint8_t)((portalLogNextIndex + 1) % PORTAL_LOG_CAPACITY);
-  if (portalLogNextIndex == 0) {
-    portalLogWrapped = true;
-  }
-  portEXIT_CRITICAL(&runtimeProbeMux);
-}
-
-static void addPortalLogsJson(JsonArray array) {
-  portENTER_CRITICAL(&runtimeProbeMux);
-  uint8_t count = portalLogWrapped ? PORTAL_LOG_CAPACITY : portalLogNextIndex;
-  uint8_t start = portalLogWrapped ? portalLogNextIndex : 0;
-  for (uint8_t i = 0; i < count; i++) {
-    const PortalLogEntry& entry = portalLogs[(start + i) % PORTAL_LOG_CAPACITY];
-    if (entry.line[0] == '\0') {
-      continue;
-    }
-    JsonObject item = array.add<JsonObject>();
-    item["captured_ms"] = entry.capturedMs;
-    item["line"] = entry.line;
-  }
-  portEXIT_CRITICAL(&runtimeProbeMux);
-}
-
 static void setRuntimeProbeHttpStatus(RuntimeProbeId id, int32_t httpStatus) {
   portENTER_CRITICAL(&runtimeProbeMux);
   runtimeProbes[id].lastHttpStatus = httpStatus;
@@ -608,7 +559,24 @@ static void emitBleSessionEvent(const char* type, const char* reason) {
 }
 
 static unsigned long telemetryIntervalMs() {
-  return (unsigned long)uploadIntervalSeconds * 1000UL;
+  unsigned long configured = (unsigned long)uploadIntervalSeconds * 1000UL;
+  return configured < FAST_TELEMETRY_INTERVAL_MS ? FAST_TELEMETRY_INTERVAL_MS : configured;
+}
+
+static bool httpsGapReady(unsigned long now) {
+  return lastHttpsAttemptMs == 0 || now - lastHttpsAttemptMs >= HTTPS_MIN_GAP_MS;
+}
+
+static void markHttpsAttempt(unsigned long now) {
+  lastHttpsAttemptMs = now;
+}
+
+static bool bleTelemetryGapReady(unsigned long now) {
+  return lastBleTelemetryActionMs == 0 || now - lastBleTelemetryActionMs >= TELEMETRY_BLE_GAP_MS;
+}
+
+static void markBleTelemetryAction(unsigned long now) {
+  lastBleTelemetryActionMs = now;
 }
 
 static void markTelemetrySnapshotDirty(TelemetrySnapshot& snapshot) {
@@ -689,107 +657,6 @@ static void resetModbusSession(const char* reason) {
   modbusReconnectFailureCount = 0;
   modbusReconnectBackoffUntilMs = 0;
   emitBleSessionEvent("ble_session_reset", reason);
-}
-
-static const esp_partition_t* findLanAlternatePartition(const esp_partition_t* runningPartition) {
-  const esp_partition_t* factoryPartition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, nullptr);
-  const esp_partition_t* ota0Partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, nullptr);
-  if (factoryPartition == nullptr || ota0Partition == nullptr || runningPartition == nullptr) {
-    return nullptr;
-  }
-  if (runningPartition->subtype == ESP_PARTITION_SUBTYPE_APP_FACTORY) {
-    return ota0Partition;
-  }
-  if (runningPartition->subtype == ESP_PARTITION_SUBTYPE_APP_OTA_0) {
-    return factoryPartition;
-  }
-  return nullptr;
-}
-
-static bool lanUpdateSupported() {
-  const esp_partition_t* runningPartition = esp_ota_get_running_partition();
-  return findLanAlternatePartition(runningPartition) != nullptr;
-}
-
-static bool beginLanFirmwareUpdate(const String& filename, String& error) {
-  error = "";
-  lanOtaLastError = "";
-  if (!filename.endsWith(".bin")) {
-    error = "firmware file must end with .bin";
-    return false;
-  }
-  abortLanFirmwareUpdate("ota_upload_restart");
-  const esp_partition_t* runningPartition = esp_ota_get_running_partition();
-  lanOtaTargetPartition = findLanAlternatePartition(runningPartition);
-  if (lanOtaTargetPartition == nullptr) {
-    error = "lan firmware update unsupported on current partition layout";
-    return false;
-  }
-  esp_err_t err = esp_ota_begin(lanOtaTargetPartition, OTA_SIZE_UNKNOWN, &lanOtaHandle);
-  if (err != ESP_OK) {
-    error = String("esp_ota_begin failed: ") + esp_err_to_name(err);
-    lanOtaHandle = 0;
-    lanOtaTargetPartition = nullptr;
-    return false;
-  }
-  lanOtaActive = true;
-  return true;
-}
-
-static bool writeLanFirmwareChunk(const uint8_t* data, size_t length, String& error) {
-  error = "";
-  if (!lanOtaActive || lanOtaTargetPartition == nullptr) {
-    error = "lan firmware update is not active";
-    return false;
-  }
-  esp_err_t err = esp_ota_write(lanOtaHandle, data, length);
-  if (err != ESP_OK) {
-    error = String("esp_ota_write failed: ") + esp_err_to_name(err);
-    return false;
-  }
-  return true;
-}
-
-static bool finishLanFirmwareUpdate(size_t totalBytes, String& error) {
-  error = "";
-  if (!lanOtaActive || lanOtaTargetPartition == nullptr) {
-    error = "lan firmware update is not active";
-    return false;
-  }
-  esp_err_t err = esp_ota_end(lanOtaHandle);
-  if (err != ESP_OK) {
-    error = String("esp_ota_end failed: ") + esp_err_to_name(err);
-    abortLanFirmwareUpdate(error);
-    return false;
-  }
-  err = esp_ota_set_boot_partition(lanOtaTargetPartition);
-  if (err != ESP_OK) {
-    error = String("esp_ota_set_boot_partition failed: ") + esp_err_to_name(err);
-    abortLanFirmwareUpdate(error);
-    return false;
-  }
-  rememberPortalLogLine(
-    String("ota_upload_ok bytes=") + totalBytes +
-    " target=" + String(lanOtaTargetPartition->label)
-  );
-  lanOtaLastError = "";
-  lanOtaHandle = 0;
-  lanOtaTargetPartition = nullptr;
-  lanOtaActive = false;
-  return true;
-}
-
-static void abortLanFirmwareUpdate(const String& reason) {
-  if (lanOtaActive) {
-    esp_ota_abort(lanOtaHandle);
-  }
-  if (reason.length() > 0) {
-    lanOtaLastError = reason;
-    rememberPortalLogLine(String("ota_upload_failed ") + reason);
-  }
-  lanOtaHandle = 0;
-  lanOtaTargetPartition = nullptr;
-  lanOtaActive = false;
 }
 
 static void invalidateModbusSession(const char* reason) {
@@ -1248,9 +1115,18 @@ static bool runFastMainCacheScheduler(unsigned long now) {
     || (long)(now - nextMainFullRefreshMs) >= 0;
 
   if (fullRefreshDue) {
+    JsonDocument plan;
+    plan["type"] = "telemetry_scheduler_plan";
+    plan["uptime_ms"] = millis() - bootMs;
+    plan["tier"] = "main_full_refresh";
+    plan["cache_valid"] = mainTelemetryCache.valid;
+    plan["cache_valid_registers"] = mainTelemetryCache.validCount;
+    plan["interval_ms"] = telemetryIntervalMs();
+    printJson(plan);
     ModbusReadResult result = runModbusRead(0, MAIN_TELEMETRY_TOTAL_REGISTERS, "main_registers_0_94_full_refresh");
     bool ok = mergeMainTelemetryCache(result, 0, MAIN_TELEMETRY_TOTAL_REGISTERS, true);
     if (ok) {
+      markBleTelemetryAction(millis());
       updateMainTelemetrySnapshotFromCache("function_03_read_only_full_cache_refresh");
       nextMainFullRefreshMs = millis() + MAIN_FULL_REFRESH_INTERVAL_MS;
       nextUploadMs = millis() + telemetryIntervalMs();
@@ -1272,9 +1148,22 @@ static bool runFastMainCacheScheduler(unsigned long now) {
   const MainTelemetryReadRange& range = FAST_MAIN_TELEMETRY_RANGES[nextFastMainRangeIndex % rangeCount];
   nextFastMainRangeIndex = (uint8_t)((nextFastMainRangeIndex + 1) % rangeCount);
 
+  JsonDocument plan;
+  plan["type"] = "telemetry_scheduler_plan";
+  plan["uptime_ms"] = millis() - bootMs;
+  plan["tier"] = "main_fast_range";
+  plan["label"] = range.label;
+  plan["start_register"] = range.startRegister;
+  plan["register_count"] = range.registerCount;
+  plan["cache_valid"] = mainTelemetryCache.valid;
+  plan["cache_valid_registers"] = mainTelemetryCache.validCount;
+  plan["interval_ms"] = telemetryIntervalMs();
+  printJson(plan);
+
   ModbusReadResult result = runModbusRead(range.startRegister, range.registerCount, range.label);
   bool ok = mergeMainTelemetryCache(result, range.startRegister, range.registerCount, false);
   if (ok) {
+    markBleTelemetryAction(millis());
     updateMainTelemetrySnapshotFromCache("function_03_read_only_fast_cache_merge");
   } else {
     emitError("main_cache_fast_read_failed", "could not merge fast main telemetry range");
@@ -1287,15 +1176,30 @@ static bool runFastMainCacheScheduler(unsigned long now) {
 }
 
 static void printJson(JsonDocument& doc) {
-  String line;
-  serializeJson(doc, line);
-  Serial0.println(line);
-  rememberPortalLogLine(line);
+  serializeJson(doc, Serial0);
+  Serial0.println();
+}
+
+static void emitHttpClientDiag(const char* lane, const char* phase, const String& endpoint, int httpStatus, size_t bodyLength) {
+  JsonDocument doc;
+  doc["type"] = "http_client_diag";
+  doc["uptime_ms"] = millis() - bootMs;
+  doc["lane"] = lane != nullptr ? lane : "";
+  doc["phase"] = phase != nullptr ? phase : "";
+  doc["http_status"] = httpStatus;
+  doc["body_length"] = bodyLength;
+  doc["endpoint"] = endpoint;
+  doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
+  doc["wifi_rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
+  doc["free_heap"] = ESP.getFreeHeap();
+  doc["min_free_heap"] = ESP.getMinFreeHeap();
+  doc["largest_8bit_block"] = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  doc["tls_insecure"] = tlsInsecure;
+  printJson(doc);
 }
 
 static void printLine(const String& line) {
   Serial0.println(line);
-  rememberPortalLogLine(line);
 }
 
 static bool isAllowedLanCommand(const String& line) {
@@ -1688,7 +1592,6 @@ static void sendPortalPage() {
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>BLE Session</h2><div class='actions'><button type='button' onclick='setBleConnection(true)'>Enable BLE</button><button type='button' class='secondary' onclick='setBleConnection(false)'>Disable BLE</button></div><p>Disabling BLE keeps local web and server connectivity alive, but stops inverter reads until BLE is enabled again.</p></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>BLE Candidates</h2><div id='ble'></div></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>LAN Control</h2><div class='actions'><button type='button' onclick='runCommand(`STATUS`)'>STATUS</button><button type='button' class='secondary' onclick='runCommand(`READ_MAIN_ONCE`)'>READ MAIN</button><button type='button' class='secondary' onclick='readLogs()'>Refresh Logs</button><button type='button' class='secondary' onclick='rebootDevice()'>Reboot</button></div><label>Command</label><input id='cmd' placeholder='READ_RANGE 0 10'><button type='button' onclick='submitCommand()'>Run Command</button></section>"
-      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Firmware Update</h2><p>Upload a matching firmware .bin over LAN. This target uses OTA app slots, so the new image is written to the inactive slot and the device reboots into it after a successful upload.</p><input id='fwbin' type='file' accept='.bin'><button type='button' onclick='uploadFirmware()'>Upload Firmware</button></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Read Access</h2><p>Home Assistant setup now requires a read pairing token. Tokens use uppercase letters for display, but they are not case-sensitive.</p><button type='button' onclick='readToken()'>Generate read pairing token</button><div id='read'></div></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Write Access</h2><p>Write remains optional. Only generate a write token when Home Assistant should be allowed to change inverter settings. Tokens use uppercase letters for display, but they are not case-sensitive.</p><button type='button' onclick='writeCode()'>Generate write pairing token</button><div id='write'></div></section>"
     );
@@ -1709,7 +1612,6 @@ static void sendPortalPage() {
     "function submitCommand(){let command=q('cmd').value.trim();if(!command){return}runCommand(command)}"
     "function readLogs(){fetch('/api/logs').then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)})}"
     "function rebootDevice(){q('out').textContent='Rebooting...';fetch('/api/reboot',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)})}"
-    "function uploadFirmware(){let file=q('fwbin').files[0];if(!file){q('out').textContent='Select a .bin file first';return}fetch('/api/status').then(r=>r.json()).then(s=>{if(!s.lan_update_supported){throw new Error('Current firmware layout does not support LAN firmware update on this board')}let data=new FormData();data.append('firmware',file);q('out').textContent='Uploading firmware...';return fetch('/api/update',{method:'POST',body:data})}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)}).catch(e=>{q('out').textContent=String(e)})}"
     "function saveLocalConfig(e){e.preventDefault();let data={ssid:q('local_ssid').value,password:q('local_pass').value,restart_wifi:true,reboot:false};fetch('/api/configure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);q('local_pass').value='';setTimeout(status,1000)})}"
     "function setBleConnection(enabled){q('out').textContent=(enabled?'Enabling':'Disabling')+' BLE...';fetch('/api/ble_connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:enabled})}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);setTimeout(status,800)})}"
     "function readToken(){q('out').textContent='Generating read pairing token...';fetch('/api/read_token',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderRead(d)})}"
@@ -1769,13 +1671,10 @@ static void setupProvisioningWebServer() {
     doc["command_poll_task_enabled"] = commandPollTaskEnabled;
     doc["ble_connection_enabled"] = bleConnectionEnabled;
     doc["ble_session_connected"] = modbusClient != nullptr && modbusClient->isConnected() && modbusCharacteristic != nullptr;
-    doc["lan_update_supported"] = lanUpdateSupported();
     JsonArray runtimeProbesJson = doc["runtime_probes"].to<JsonArray>();
     addRuntimeProbeJson(runtimeProbesJson);
     JsonArray runtimeTraceJson = doc["runtime_trace"].to<JsonArray>();
     addRuntimeTraceJson(runtimeTraceJson);
-    JsonArray portalLogsJson = doc["portal_logs"].to<JsonArray>();
-    addPortalLogsJson(portalLogsJson);
     String body;
     serializeJson(doc, body);
     server.send(200, "application/json", body);
@@ -1784,8 +1683,7 @@ static void setupProvisioningWebServer() {
   server.on("/api/logs", HTTP_GET, []() {
     JsonDocument doc;
     doc["ok"] = true;
-    JsonArray logs = doc["logs"].to<JsonArray>();
-    addPortalLogsJson(logs);
+    doc["logs"].to<JsonArray>();
     String body;
     serializeJson(doc, body);
     server.send(200, "application/json", body);
@@ -1828,48 +1726,6 @@ static void setupProvisioningWebServer() {
     server.send(200, "application/json", body);
     delay(500);
     ESP.restart();
-  });
-
-  server.on("/api/update", HTTP_POST, []() {
-    JsonDocument result;
-    if (!lanOtaActive) {
-      result["ok"] = false;
-      result["error"] = "firmware update failed";
-      if (lanOtaLastError.length() > 0) {
-        result["detail"] = lanOtaLastError;
-      }
-      String body;
-      serializeJson(result, body);
-      server.send(400, "application/json", body);
-      return;
-    }
-    result["ok"] = true;
-    result["rebooting"] = true;
-    String body;
-    serializeJson(result, body);
-    server.send(200, "application/json", body);
-    delay(500);
-    ESP.restart();
-  }, []() {
-    HTTPUpload& upload = server.upload();
-    if (upload.status == UPLOAD_FILE_START) {
-      String filename = upload.filename;
-      rememberPortalLogLine(String("ota_upload_start ") + filename);
-      String error;
-      if (!beginLanFirmwareUpdate(filename, error)) {
-        abortLanFirmwareUpdate(error);
-      }
-    } else if (upload.status == UPLOAD_FILE_WRITE) {
-      String error;
-      if (!writeLanFirmwareChunk(upload.buf, upload.currentSize, error)) {
-        abortLanFirmwareUpdate(error);
-      }
-    } else if (upload.status == UPLOAD_FILE_END) {
-      String error;
-      finishLanFirmwareUpdate(upload.totalSize, error);
-    } else if (upload.status == UPLOAD_FILE_ABORTED) {
-      abortLanFirmwareUpdate("ota_upload_aborted");
-    }
   });
 
   server.on("/api/write_code", HTTP_POST, []() {
@@ -2344,12 +2200,21 @@ static bool postTelemetry(
     finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, true);
     return false;
   }
+  unsigned long httpNow = millis();
+  if (!httpsGapReady(httpNow)) {
+    setRuntimeProbeHttpStatus(PROBE_TELEMETRY_UPLOAD, -3);
+    unlockHttpOperation();
+    finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, true);
+    return false;
+  }
+  markHttpsAttempt(httpNow);
 
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
   HTTPClient http;
   bool beginOk = false;
   if (endpoint.startsWith("https://")) {
+    emitHttpClientDiag("telemetry_upload", "pre_begin", endpoint, 0, body.length());
     if (tlsInsecure) {
       secureClient.setInsecure();
     }
@@ -2359,6 +2224,7 @@ static bool postTelemetry(
   }
   if (!beginOk) {
     setRuntimeProbeHttpStatus(PROBE_TELEMETRY_UPLOAD, -1);
+    emitHttpClientDiag("telemetry_upload", "begin_failed", endpoint, -1, body.length());
     unlockHttpOperation();
     finishRuntimeProbe(PROBE_TELEMETRY_UPLOAD, probeStartedMs, false);
     emitError("http_begin_failed", "could not initialize HTTP client");
@@ -2372,6 +2238,9 @@ static bool postTelemetry(
 
   int status = http.POST((uint8_t*)body.c_str(), body.length());
   setRuntimeProbeHttpStatus(PROBE_TELEMETRY_UPLOAD, status);
+  if (status < 0) {
+    emitHttpClientDiag("telemetry_upload", "request_failed", endpoint, status, body.length());
+  }
   String response = http.getString();
   http.end();
   unlockHttpOperation();
@@ -2462,12 +2331,19 @@ static bool postGatewayStatus(const char* reason) {
   serializeJson(doc, body);
 
   if (!lockHttpOperation(10000)) return false;
+  unsigned long httpNow = millis();
+  if (!httpsGapReady(httpNow)) {
+    unlockHttpOperation();
+    return false;
+  }
+  markHttpsAttempt(httpNow);
 
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
   HTTPClient http;
   bool beginOk = false;
   if (endpoint.startsWith("https://")) {
+    emitHttpClientDiag("gateway_status", "pre_begin", endpoint, 0, body.length());
     if (tlsInsecure) {
       secureClient.setInsecure();
     }
@@ -2476,6 +2352,7 @@ static bool postGatewayStatus(const char* reason) {
     beginOk = http.begin(plainClient, endpoint);
   }
   if (!beginOk) {
+    emitHttpClientDiag("gateway_status", "begin_failed", endpoint, -1, body.length());
     unlockHttpOperation();
     return false;
   }
@@ -2486,6 +2363,9 @@ static bool postGatewayStatus(const char* reason) {
   http.addHeader("User-Agent", String(FW_NAME) + "/" + FW_VERSION);
 
   int status = http.POST((uint8_t*)body.c_str(), body.length());
+  if (status < 0) {
+    emitHttpClientDiag("gateway_status", "request_failed", endpoint, status, body.length());
+  }
   String response = http.getString();
   http.end();
   unlockHttpOperation();
@@ -2539,6 +2419,7 @@ static bool postGatewayCandidates() {
   HTTPClient http;
   bool beginOk = false;
   if (endpoint.startsWith("https://")) {
+    emitHttpClientDiag("command_poll", "pre_begin", endpoint, 0, 0);
     if (tlsInsecure) {
       secureClient.setInsecure();
     }
@@ -2814,12 +2695,13 @@ static void maybeAccelerateAfterWriteCommand(const char* status, JsonDocument& r
   if (status == nullptr) {
     return;
   }
+  telemetryResumeAfterWriteMs = millis() + WRITE_LANE_RESUME_DELAY_MS;
   if (strcmp(status, "completed") == 0) {
     uploadSettingsSnapshotNow("post_write_command_completed");
     nextSettingsPollMs = millis() + SETTINGS_UPLOAD_INTERVAL_MS;
   }
   lastCommandPollMs = 0;
-  nextUploadMs = millis() + telemetryIntervalMs();
+  nextUploadMs = telemetryResumeAfterWriteMs + telemetryIntervalMs();
 
   JsonDocument log;
   log["type"] = "write_lane_accelerated";
@@ -3488,6 +3370,11 @@ static void executeCommand(JsonObject command) {
   const char* commandName = command["command"] | "";
   const char* mode = command["mode"] | "";
   const char* commandDeviceId = command["device_id"] | "";
+  bool isWriteCommand = strcmp(mode, "write") == 0;
+  if (isWriteCommand) {
+    writeLaneActive = true;
+    telemetryResumeAfterWriteMs = 0;
+  }
 
   JsonDocument result;
   result["ble_write"] = false;
@@ -3512,12 +3399,18 @@ static void executeCommand(JsonObject command) {
 
   if (commandId <= 0 || String(commandDeviceId) != deviceId) {
     postCommandResult(commandId, "rejected", result, "invalid command id or device mismatch");
+    if (isWriteCommand) {
+      writeLaneActive = false;
+    }
     return;
   }
 
   if (strcmp(mode, "dry_run") == 0 && strcmp(commandName, "dry_run_noop") == 0) {
     result["dry_run"] = true;
     postCommandResult(commandId, "dry_run_completed", result, nullptr);
+    if (isWriteCommand) {
+      writeLaneActive = false;
+    }
     return;
   }
 
@@ -3525,6 +3418,7 @@ static void executeCommand(JsonObject command) {
     const char* status = commandResultStatusForOutcome(ok, result);
     postCommandResult(commandId, status, result, ok ? nullptr : errorMessage.c_str());
     maybeAccelerateAfterWriteCommand(status, result);
+    writeLaneActive = false;
   };
 
   if (strcmp(mode, "write") == 0 && strcmp(commandName, "set_first_discharge_target_soc") == 0) {
@@ -3621,6 +3515,9 @@ static void executeCommand(JsonObject command) {
   }
 
   postCommandResult(commandId, "rejected", result, "unsupported command");
+  if (isWriteCommand) {
+    writeLaneActive = false;
+  }
 }
 
 static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result) {
@@ -3677,6 +3574,14 @@ static void pollPendingCommand() {
     finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
     return;
   }
+  unsigned long httpNow = millis();
+  if (!httpsGapReady(httpNow)) {
+    setRuntimeProbeHttpStatus(PROBE_COMMAND_POLL, -3);
+    unlockHttpOperation();
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
+    return;
+  }
+  markHttpsAttempt(httpNow);
 
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
@@ -3692,6 +3597,7 @@ static void pollPendingCommand() {
   }
   if (!beginOk) {
     setRuntimeProbeHttpStatus(PROBE_COMMAND_POLL, -1);
+    emitHttpClientDiag("command_poll", "begin_failed", endpoint, -1, 0);
     unlockHttpOperation();
     finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, false);
     return;
@@ -3703,6 +3609,9 @@ static void pollPendingCommand() {
 
   int httpStatus = http.GET();
   setRuntimeProbeHttpStatus(PROBE_COMMAND_POLL, httpStatus);
+  if (httpStatus < 0) {
+    emitHttpClientDiag("command_poll", "request_failed", endpoint, httpStatus, 0);
+  }
   String response = http.getString();
   http.end();
   unlockHttpOperation();
@@ -4735,7 +4644,15 @@ static void maybeRunTelemetryScheduler() {
     finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
     return;
   }
+  if (writeLaneActive) {
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
+    return;
+  }
   unsigned long now = millis();
+  if (telemetryResumeAfterWriteMs != 0 && (long)(now - telemetryResumeAfterWriteMs) < 0) {
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
+    return;
+  }
   if (nextUploadMs == 0) {
     nextUploadMs = now + 2000;
   }
@@ -4760,25 +4677,91 @@ static void maybeRunTelemetryScheduler() {
     }
   }
 
+  bool settingsDue = (long)(now - nextSettingsPollMs) >= 0;
+  bool statsDue = (long)(now - nextStatsPollMs) >= 0;
+  bool fastDue = (long)(now - nextUploadMs) >= 0;
+  bool fullRefreshDue = !mainTelemetryCache.valid
+    || nextMainFullRefreshMs == 0
+    || (long)(now - nextMainFullRefreshMs) >= 0;
+
+  if (settingsDue && bleTelemetryGapReady(now)) {
+    JsonDocument plan;
+    plan["type"] = "telemetry_scheduler_plan";
+    plan["uptime_ms"] = millis() - bootMs;
+    plan["tier"] = "settings";
+    plan["start_register"] = 95;
+    plan["register_count"] = 95;
+    plan["interval_ms"] = SETTINGS_UPLOAD_INTERVAL_MS;
+    printJson(plan);
+    ModbusReadResult settings = runModbusRead(95, 95, "settings_registers_95_189");
+    if (settings.ok) {
+      markBleTelemetryAction(millis());
+      updateTelemetrySnapshot(
+        latestSettingsTelemetry,
+        settings,
+        95,
+        95,
+        "settings_registers_95_189",
+        "function_03_read_only_no_setting_write"
+      );
+      lastSettingsUploadMs = millis();
+    } else {
+      emitError("settings_read_empty", "no settings Modbus response payload to cache");
+      markTelemetrySnapshotDirty(latestSettingsTelemetry);
+    }
+    nextSettingsPollMs = millis() + SETTINGS_UPLOAD_INTERVAL_MS;
+    nextUploadMs = millis() + telemetryIntervalMs();
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, settings.ok);
+    return;
+  }
+
+  if (statsDue && bleTelemetryGapReady(now)) {
+    JsonDocument plan;
+    plan["type"] = "telemetry_scheduler_plan";
+    plan["uptime_ms"] = millis() - bootMs;
+    plan["tier"] = "statistics";
+    plan["start_register"] = 0;
+    plan["register_count"] = 8;
+    plan["interval_ms"] = STATS_UPLOAD_INTERVAL_MS;
+    printJson(plan);
+    ModbusReadResult stats = runModbusReadInput(0, 8, "today_statistics_0_7");
+    if (stats.ok) {
+      markBleTelemetryAction(millis());
+      updateTelemetrySnapshot(
+        latestStatsTelemetry,
+        stats,
+        0,
+        8,
+        "today_statistics_0_7",
+        "function_04_read_only_input_registers"
+      );
+      lastStatsUploadMs = millis();
+    } else {
+      emitError("stats_read_empty", "no statistics Modbus response payload to cache");
+      markTelemetrySnapshotDirty(latestStatsTelemetry);
+    }
+    nextStatsPollMs = millis() + STATS_UPLOAD_INTERVAL_MS;
+    nextUploadMs = millis() + telemetryIntervalMs();
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, stats.ok);
+    return;
+  }
+
   if (LUMENTREE_USE_FAST_MAIN_CACHE != 0) {
-    bool mainDue = !mainTelemetryCache.valid
-      || nextMainFullRefreshMs == 0
-      || (long)(now - nextMainFullRefreshMs) >= 0
-      || (long)(now - nextUploadMs) >= 0;
-    if (mainDue) {
+    if ((fullRefreshDue || fastDue) && bleTelemetryGapReady(now)) {
       bool ok = runFastMainCacheScheduler(now);
       finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, ok);
       return;
     }
   }
 
-  if ((long)(now - nextUploadMs) >= 0) {
+  if (fastDue && bleTelemetryGapReady(now)) {
     uint16_t startRegister = nextMainTelemetryStartRegister;
     uint16_t registerCount = mainTelemetryChunkLengthForStart(startRegister);
     char label[48];
     buildMainTelemetryLabel(startRegister, registerCount, label, sizeof(label));
     ModbusReadResult result = runModbusRead(startRegister, registerCount, label);
     if (result.ok) {
+      markBleTelemetryAction(millis());
       updateTelemetrySnapshot(
         latestMainTelemetry,
         result,
@@ -4797,50 +4780,6 @@ static void maybeRunTelemetryScheduler() {
     }
     nextUploadMs = millis() + telemetryIntervalMs();
     finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, result.ok);
-    return;
-  }
-
-  now = millis();
-  if ((long)(now - nextSettingsPollMs) >= 0) {
-    ModbusReadResult settings = runModbusRead(95, 95, "settings_registers_95_189");
-    if (settings.ok) {
-      updateTelemetrySnapshot(
-        latestSettingsTelemetry,
-        settings,
-        95,
-        95,
-        "settings_registers_95_189",
-        "function_03_read_only_no_setting_write"
-      );
-      lastSettingsUploadMs = millis();
-    } else {
-      emitError("settings_read_empty", "no settings Modbus response payload to cache");
-      markTelemetrySnapshotDirty(latestSettingsTelemetry);
-    }
-    nextSettingsPollMs = millis() + SETTINGS_UPLOAD_INTERVAL_MS;
-    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, settings.ok);
-    return;
-  }
-
-  now = millis();
-  if ((long)(now - nextStatsPollMs) >= 0) {
-    ModbusReadResult stats = runModbusReadInput(0, 8, "today_statistics_0_7");
-    if (stats.ok) {
-      updateTelemetrySnapshot(
-        latestStatsTelemetry,
-        stats,
-        0,
-        8,
-        "today_statistics_0_7",
-        "function_04_read_only_input_registers"
-      );
-      lastStatsUploadMs = millis();
-    } else {
-      emitError("stats_read_empty", "no statistics Modbus response payload to cache");
-      markTelemetrySnapshotDirty(latestStatsTelemetry);
-    }
-    nextStatsPollMs = millis() + STATS_UPLOAD_INTERVAL_MS;
-    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, stats.ok);
     return;
   }
 
