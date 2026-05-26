@@ -369,6 +369,18 @@ static void unlockHttpOperation();
 static void telemetryTaskLoop(void* parameter);
 static void commandPollTaskLoop(void* parameter);
 static void handleCommand(String line);
+static bool applyLanConfig(
+  const String* nextSsid,
+  const String* nextPassword,
+  const String* nextDeviceId,
+  const String* nextTargetMac,
+  const String* nextApiUrl,
+  const String* nextApiToken,
+  const String* nextGatewayId,
+  const bool* nextProductionEnabled,
+  bool restartWifi,
+  String& error
+);
 static bool lanUpdateSupported();
 static bool beginLanFirmwareUpdate(const String& filename, String& error);
 static bool writeLanFirmwareChunk(const uint8_t* data, size_t length, String& error);
@@ -1323,6 +1335,96 @@ static void saveStringConfig(const char* key, const String& value) {
   prefs.putString(key, value);
 }
 
+static bool applyLanConfig(
+  const String* nextSsid,
+  const String* nextPassword,
+  const String* nextDeviceId,
+  const String* nextTargetMac,
+  const String* nextApiUrl,
+  const String* nextApiToken,
+  const String* nextGatewayId,
+  const bool* nextProductionEnabled,
+  bool restartWifi,
+  String& error
+) {
+  error = "";
+  bool targetChanged = false;
+  bool wifiChanged = false;
+
+  if (nextSsid != nullptr) {
+    String value = *nextSsid;
+    value.trim();
+    wifiSsid = value;
+    saveStringConfig("wifi_ssid", wifiSsid);
+    wifiChanged = true;
+  }
+  if (nextPassword != nullptr) {
+    wifiPassword = *nextPassword;
+    saveStringConfig("wifi_pass", wifiPassword);
+    wifiChanged = true;
+  }
+  if (nextDeviceId != nullptr) {
+    String value = *nextDeviceId;
+    value.trim();
+    if (value.length() == 0) {
+      error = "device_id must not be empty";
+      return false;
+    }
+    deviceId = value;
+    saveStringConfig("device_id", deviceId);
+  }
+  if (nextTargetMac != nullptr) {
+    String value = normalizeMac(*nextTargetMac);
+    if (value.length() == 0) {
+      error = "target_mac must not be empty";
+      return false;
+    }
+    if (value != targetMac) {
+      targetChanged = true;
+    }
+    targetMac = value;
+    targetAddressTypeKnown = true;
+    pairingStatus = "paired";
+    saveStringConfig("target_mac", targetMac);
+  }
+  if (nextApiUrl != nullptr) {
+    String value = *nextApiUrl;
+    value.trim();
+    apiUrl = value;
+    saveStringConfig("api_url", apiUrl);
+  }
+  if (nextApiToken != nullptr) {
+    String value = *nextApiToken;
+    value.trim();
+    apiToken = value;
+    saveStringConfig("api_token", apiToken);
+  }
+  if (nextGatewayId != nullptr) {
+    String value = *nextGatewayId;
+    value.trim();
+    if (value.length() == 0) {
+      gatewayId = defaultGatewayId();
+    } else {
+      gatewayId = value;
+    }
+    saveStringConfig("gateway_id", gatewayId);
+  }
+  if (nextProductionEnabled != nullptr) {
+    productionEnabled = *nextProductionEnabled;
+    prefs.putBool("prod", productionEnabled);
+  }
+
+  if (targetChanged) {
+    resetModbusSession("lan_config_target_changed");
+    postGatewayStatus("lan_config_target_changed");
+  }
+  if (wifiChanged && restartWifi) {
+    WiFi.disconnect(true);
+  }
+
+  return true;
+}
+
 static void emitConfig(const char* type) {
   JsonDocument doc;
   doc["type"] = type;
@@ -1912,6 +2014,106 @@ static void setupProvisioningWebServer() {
     server.send(200, "application/json", body);
     delay(500);
     ESP.restart();
+  });
+
+  server.on("/api/configure", HTTP_POST, []() {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, server.arg("plain"));
+    if (error) {
+      server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid json\"}");
+      return;
+    }
+
+    String ssidValue;
+    String passwordValue;
+    String deviceIdValue;
+    String targetMacValue;
+    String apiUrlValue;
+    String apiTokenValue;
+    String gatewayIdValue;
+    bool productionValue = productionEnabled;
+
+    const String* nextSsid = nullptr;
+    const String* nextPassword = nullptr;
+    const String* nextDeviceId = nullptr;
+    const String* nextTargetMac = nullptr;
+    const String* nextApiUrl = nullptr;
+    const String* nextApiToken = nullptr;
+    const String* nextGatewayId = nullptr;
+    const bool* nextProductionEnabled = nullptr;
+
+    if (doc["ssid"].is<JsonVariant>()) {
+      ssidValue = doc["ssid"] | "";
+      nextSsid = &ssidValue;
+    }
+    if (doc["password"].is<JsonVariant>()) {
+      passwordValue = doc["password"] | "";
+      nextPassword = &passwordValue;
+    }
+    if (doc["device_id"].is<JsonVariant>()) {
+      deviceIdValue = doc["device_id"] | "";
+      nextDeviceId = &deviceIdValue;
+    }
+    if (doc["target_mac"].is<JsonVariant>()) {
+      targetMacValue = doc["target_mac"] | "";
+      nextTargetMac = &targetMacValue;
+    }
+    if (doc["api_url"].is<JsonVariant>()) {
+      apiUrlValue = doc["api_url"] | "";
+      nextApiUrl = &apiUrlValue;
+    }
+    if (doc["api_token"].is<JsonVariant>()) {
+      apiTokenValue = doc["api_token"] | "";
+      nextApiToken = &apiTokenValue;
+    }
+    if (doc["gateway_id"].is<JsonVariant>()) {
+      gatewayIdValue = doc["gateway_id"] | "";
+      nextGatewayId = &gatewayIdValue;
+    }
+    if (doc["production_enabled"].is<bool>()) {
+      productionValue = doc["production_enabled"].as<bool>();
+      nextProductionEnabled = &productionValue;
+    }
+
+    bool restartWifi = doc["restart_wifi"] | true;
+    bool reboot = doc["reboot"] | false;
+    String applyError;
+    if (!applyLanConfig(
+          nextSsid,
+          nextPassword,
+          nextDeviceId,
+          nextTargetMac,
+          nextApiUrl,
+          nextApiToken,
+          nextGatewayId,
+          nextProductionEnabled,
+          restartWifi,
+          applyError)) {
+      JsonDocument result;
+      result["ok"] = false;
+      result["error"] = applyError;
+      String body;
+      serializeJson(result, body);
+      server.send(400, "application/json", body);
+      return;
+    }
+
+    JsonDocument result;
+    result["ok"] = true;
+    result["rebooting"] = reboot;
+    result["wifi_restarted"] = restartWifi && (nextSsid != nullptr || nextPassword != nullptr);
+    result["device_id"] = deviceId;
+    result["target_mac"] = targetMac;
+    result["gateway_id"] = gatewayId;
+    result["production_enabled"] = productionEnabled;
+    result["local_url"] = localPortalUrl();
+    String body;
+    serializeJson(result, body);
+    server.send(200, "application/json", body);
+    if (reboot) {
+      delay(500);
+      ESP.restart();
+    }
   });
 
   server.onNotFound(sendPortalPage);
@@ -4655,12 +4857,13 @@ static void handleCommand(String line) {
     prefs.remove("target_mac");
     emitAck(line == "CLEAR_TARGET" ? "CLEAR_TARGET" : "CLEAR_TARGET_MAC");
   } else if (line.startsWith("SET_TARGET ") || line.startsWith("SET_TARGET_MAC ")) {
-    resetModbusSession("target_changed");
     int offset = line.startsWith("SET_TARGET_MAC ") ? 15 : 11;
-    targetMac = normalizeMac(line.substring(offset));
-    targetAddressTypeKnown = targetMac.length() > 0;
-    saveStringConfig("target_mac", targetMac);
-    pairingStatus = targetMac.length() > 0 ? "paired" : "unconfigured";
+    String nextTargetMac = line.substring(offset);
+    String applyError;
+    if (!applyLanConfig(nullptr, nullptr, nullptr, &nextTargetMac, nullptr, nullptr, nullptr, nullptr, false, applyError)) {
+      emitError("set_target_mac_failed", applyError.c_str());
+      return;
+    }
     emitAck(line.startsWith("SET_TARGET_MAC ") ? "SET_TARGET_MAC" : "SET_TARGET");
   } else if (line.startsWith("SET_ACTIVE ")) {
     int value = line.substring(11).toInt();
@@ -4692,11 +4895,13 @@ static void handleCommand(String line) {
       emitError("bad_command", "usage: SET_WIFI ssid password");
       return;
     }
-    wifiSsid = rest.substring(0, split);
-    wifiPassword = rest.substring(split + 1);
-    saveStringConfig("wifi_ssid", wifiSsid);
-    saveStringConfig("wifi_pass", wifiPassword);
-    WiFi.disconnect(true);
+    String nextSsid = rest.substring(0, split);
+    String nextPassword = rest.substring(split + 1);
+    String applyError;
+    if (!applyLanConfig(&nextSsid, &nextPassword, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, true, applyError)) {
+      emitError("set_wifi_failed", applyError.c_str());
+      return;
+    }
     emitAck("SET_WIFI");
   } else if (line.startsWith("SET_API_URL ")) {
     apiUrl = line.substring(12);
@@ -4709,9 +4914,12 @@ static void handleCommand(String line) {
     saveStringConfig("api_token", apiToken);
     emitAck("SET_API_TOKEN");
   } else if (line.startsWith("SET_DEVICE_ID ")) {
-    deviceId = line.substring(14);
-    deviceId.trim();
-    saveStringConfig("device_id", deviceId);
+    String nextDeviceId = line.substring(14);
+    String applyError;
+    if (!applyLanConfig(nullptr, nullptr, &nextDeviceId, nullptr, nullptr, nullptr, nullptr, nullptr, false, applyError)) {
+      emitError("set_device_id_failed", applyError.c_str());
+      return;
+    }
     emitAck("SET_DEVICE_ID");
   } else if (line.startsWith("SET_GATEWAY_ID ")) {
     gatewayId = line.substring(15);
