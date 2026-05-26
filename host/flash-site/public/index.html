@@ -137,6 +137,10 @@
       background: rgba(210, 153, 34, 0.12);
       color: #f2cc60;
     }
+    .board-level.preview {
+      background: rgba(63, 185, 80, 0.12);
+      color: #7ee787;
+    }
     .board-meta {
       display: flex;
       flex-wrap: wrap;
@@ -204,15 +208,15 @@
       </div>
 
       <p class="small" data-i18n="supported">
-        ESP32-S3 hiện là dòng stable. ESP32-C3 Super Mini đã build, flash và chạy thực tế thành công nhưng vẫn được gắn nhãn experimental để user tự chọn có dùng hay không.
+        Website hiện giữ nguyên line ESP32-S3 stable cũ, đồng thời thêm line ESP32-S3 preview dùng runtime scheduler mới và line ESP32-C3 experimental đang chạy thật ngoài hiện trường.
       </p>
 
       <div class="board-grid">
         <section class="board-card">
           <div class="board-level stable" data-i18n="s3_level">Stable</div>
-          <h3 data-i18n="s3_title">ESP32-S3</h3>
+          <h3 data-i18n="s3_title">ESP32-S3 Stable Legacy</h3>
           <p class="board-copy" data-i18n="s3_copy">
-            Dành cho line production đã chạy ổn định lâu dài. Đây là lựa chọn mặc định nếu board của bạn là ESP32-S3.
+            Dành cho line ESP32-S3 stable cũ đã chạy production lâu dài. Chọn bản này nếu bạn cần firmware fallback ít rủi ro nhất.
           </p>
           <div class="board-meta">
             <span class="badge" data-i18n="s3_flash">Flash: 8MB trở lên</span>
@@ -222,6 +226,26 @@
           <div class="flash-box">
             <esp-web-install-button manifest="/firmware/esp32-s3/flash-manifest.json">
               <span slot="activate" data-i18n="s3_button">Nạp firmware ESP32-S3</span>
+              <span slot="unsupported" data-i18n="flash_unsupported">Trình duyệt này không hỗ trợ WebSerial</span>
+              <span slot="not-allowed" data-i18n="flash_https">WebSerial yêu cầu HTTPS</span>
+            </esp-web-install-button>
+          </div>
+        </section>
+
+        <section class="board-card">
+          <div class="board-level preview" data-i18n="s3_preview_level">Preview</div>
+          <h3 data-i18n="s3_preview_title">ESP32-S3 Runtime Mới</h3>
+          <p class="board-copy" data-i18n="s3_preview_copy">
+            Dành cho ESP32-S3 muốn chạy cùng runtime BLE/session/scheduler mới đang được chốt trên line ESP32-C3, nhưng chưa flash-test thật trên board S3 trong vòng này.
+          </p>
+          <div class="board-meta">
+            <span class="badge" data-i18n="s3_preview_flash">Flash: 8MB trở lên</span>
+            <span class="badge" data-i18n="s3_preview_psram">PSRAM: tùy chọn</span>
+            <span class="badge" id="firmware-version-s3-preview">ESP32-S3 preview: đang tải...</span>
+          </div>
+          <div class="flash-box">
+            <esp-web-install-button manifest="/firmware/esp32-s3-preview/flash-manifest.json">
+              <span slot="activate" data-i18n="s3_preview_button">Nạp firmware ESP32-S3 Preview</span>
               <span slot="unsupported" data-i18n="flash_unsupported">Trình duyệt này không hỗ trợ WebSerial</span>
               <span slot="not-allowed" data-i18n="flash_https">WebSerial yêu cầu HTTPS</span>
             </esp-web-install-button>
@@ -302,13 +326,19 @@
         badge_flash: "Yêu cầu flash: xem theo từng board",
         badge_psram: "PSRAM: không bắt buộc",
         warn: "Nạp firmware sẽ ghi đè firmware hiện tại trên thiết bị. Cần cáp USB có dữ liệu. Nên dùng Chrome hoặc Edge trên máy tính.",
-        supported: "ESP32-S3 hiện là dòng stable. ESP32-C3 Super Mini đã build, flash và chạy thực tế thành công nhưng vẫn được gắn nhãn experimental để user tự chọn có dùng hay không.",
+        supported: "Website hiện giữ nguyên line ESP32-S3 stable cũ, đồng thời thêm line ESP32-S3 preview dùng runtime scheduler mới và line ESP32-C3 experimental đang chạy thật ngoài hiện trường.",
         s3_level: "Stable",
-        s3_title: "ESP32-S3",
-        s3_copy: "Dành cho line production đã chạy ổn định lâu dài. Đây là lựa chọn mặc định nếu board của bạn là ESP32-S3.",
+        s3_title: "ESP32-S3 Stable Legacy",
+        s3_copy: "Dành cho line ESP32-S3 stable cũ đã chạy production lâu dài. Chọn bản này nếu bạn cần firmware fallback ít rủi ro nhất.",
         s3_flash: "Flash: 8MB trở lên",
         s3_psram: "PSRAM: tùy chọn",
         s3_button: "Nạp firmware ESP32-S3",
+        s3_preview_level: "Preview",
+        s3_preview_title: "ESP32-S3 Runtime Mới",
+        s3_preview_copy: "Dành cho ESP32-S3 muốn chạy cùng runtime BLE/session/scheduler mới đang được chốt trên line ESP32-C3, nhưng chưa flash-test thật trên board S3 trong vòng này.",
+        s3_preview_flash: "Flash: 8MB trở lên",
+        s3_preview_psram: "PSRAM: tùy chọn",
+        s3_preview_button: "Nạp firmware ESP32-S3 Preview",
         c3_level: "Experimental",
         c3_title: "ESP32-C3 Super Mini",
         c3_copy: "Dành cho board 4MB kiểu ESP32-C3 Super Mini. Bản này đã build, flash, boot và chạy thực tế end-to-end, nhưng vẫn chưa được xem là stable line.",
@@ -337,6 +367,7 @@
         firmware_loading: "Manifest: đang tải...",
         firmware_unavailable: "Manifest: không truy cập được",
         firmware_s3_unavailable: "ESP32-S3: không truy cập được",
+        firmware_s3_preview_unavailable: "ESP32-S3 preview: không truy cập được",
         firmware_c3_unavailable: "ESP32-C3: không truy cập được"
       },
       en: {
@@ -347,13 +378,19 @@
         badge_flash: "Flash Requirement: see each board",
         badge_psram: "PSRAM: not required",
         warn: "Flashing rewrites the current device firmware. Use a USB data cable. Chrome or Edge on desktop is recommended.",
-        supported: "ESP32-S3 is the current stable line. ESP32-C3 Super Mini has now built, flashed, and run successfully in real tests, but it still stays labeled experimental so members can choose it deliberately.",
+        supported: "The site now keeps the older stable ESP32-S3 line, adds a preview ESP32-S3 line with the newer scheduler runtime, and keeps the field-tested ESP32-C3 line labeled experimental.",
         s3_level: "Stable",
-        s3_title: "ESP32-S3",
-        s3_copy: "Use this for the production line that has already been running stably for an extended period. This is the default choice for ESP32-S3 boards.",
+        s3_title: "ESP32-S3 Stable Legacy",
+        s3_copy: "Use this older stable ESP32-S3 production line when you want the lowest-risk fallback firmware.",
         s3_flash: "Flash: 8MB or larger",
         s3_psram: "PSRAM: optional",
         s3_button: "Flash ESP32-S3 Firmware",
+        s3_preview_level: "Preview",
+        s3_preview_title: "ESP32-S3 New Runtime",
+        s3_preview_copy: "Use this for ESP32-S3 boards that should run the newer BLE/session/scheduler runtime now proven on the ESP32-C3 line, but not yet flashed on real S3 hardware in this cycle.",
+        s3_preview_flash: "Flash: 8MB or larger",
+        s3_preview_psram: "PSRAM: optional",
+        s3_preview_button: "Flash ESP32-S3 Preview Firmware",
         c3_level: "Experimental",
         c3_title: "ESP32-C3 Super Mini",
         c3_copy: "Use this for 4MB-class ESP32-C3 Super Mini boards. This line now builds, flashes, boots, and runs end-to-end in real tests, but it is not yet treated as the stable line.",
@@ -382,6 +419,7 @@
         firmware_loading: "Manifest: loading...",
         firmware_unavailable: "Manifest: unavailable",
         firmware_s3_unavailable: "ESP32-S3: unavailable",
+        firmware_s3_preview_unavailable: "ESP32-S3 preview: unavailable",
         firmware_c3_unavailable: "ESP32-C3: unavailable"
       }
     };
@@ -426,6 +464,7 @@
 
     updateManifestBadge("firmware-version-badge", "Manifest:", "/firmware/flash-manifest.json", "firmware_unavailable");
     updateManifestBadge("firmware-version-s3", "ESP32-S3:", "/firmware/esp32-s3/flash-manifest.json", "firmware_s3_unavailable");
+    updateManifestBadge("firmware-version-s3-preview", "ESP32-S3 preview:", "/firmware/esp32-s3-preview/flash-manifest.json", "firmware_s3_preview_unavailable");
     updateManifestBadge("firmware-version-c3", "ESP32-C3:", "/firmware/esp32-c3/flash-manifest.json", "firmware_c3_unavailable");
   </script>
 </body>

@@ -1,9 +1,9 @@
 {
   "name": "Lumentree Local BLE Bridge",
-  "version": "0.15.2-exp-c3-fastbulk-task",
+  "version": "0.15.2-preview-s3-fastbulk-task",
   "builds": [
     {
-      "chipFamily": "ESP32-C3",
+      "chipFamily": "ESP32-S3",
       "parts": [
         {
           "path": "bootloader.bin",
@@ -12,6 +12,10 @@
         {
           "path": "partitions.bin",
           "offset": 32768
+        },
+        {
+          "path": "boot_app0.bin",
+          "offset": 57344
         },
         {
           "path": "lumentree-ble-bridge.bin",

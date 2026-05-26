@@ -154,6 +154,22 @@ remote = origin
     - `main_telemetry_cache_valid_registers = 95`
     - `telemetry_upload.last_http_status = 201`
     - `telemetry_upload.failures = 0`
+- Current publish/deploy baseline after the 2026-05-26 release snapshot:
+  - Home Assistant integration version in this private runtime repo:
+    - `0.14.18`
+  - published `ESP32-C3` website line now points to:
+    - `esp32-c3-4mb-debug-cmdtask-fastbulk-task`
+    - firmware version `0.15.2-exp-c3-fastbulk-task`
+  - older `ESP32-S3` website line is intentionally preserved as:
+    - `esp32-s3-8mb-nopsram-release`
+    - firmware version `0.15.1`
+  - new `ESP32-S3` website preview line is published separately as:
+    - `esp32-s3-8mb-nopsram-fastbulk-preview`
+    - firmware version `0.15.2-preview-s3-fastbulk-task`
+  - flash website now exposes three choices:
+    - `ESP32-S3 Stable Legacy`
+    - `ESP32-S3 Preview`
+    - `ESP32-C3 Super Mini`
 
 ## Operational Rule
 

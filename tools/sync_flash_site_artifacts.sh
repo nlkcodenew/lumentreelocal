@@ -5,8 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SITE_FIRMWARE_DIR="$ROOT_DIR/host/flash-site/public/firmware"
 BOOT_APP0="$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
 PLATFORMIO_INI="$ROOT_DIR/firmware/platformio.ini"
-S3_ENV="${S3_ENV:-esp32-s3-8mb-nopsram-release}"
-C3_ENV="${C3_ENV:-esp32-c3-4mb-experimental}"
+S3_LEGACY_ENV="${S3_LEGACY_ENV:-esp32-s3-8mb-nopsram-release}"
+S3_PREVIEW_ENV="${S3_PREVIEW_ENV:-esp32-s3-8mb-nopsram-fastbulk-preview}"
+C3_ENV="${C3_ENV:-esp32-c3-4mb-debug-cmdtask-fastbulk-task}"
 
 mkdir -p "$SITE_FIRMWARE_DIR"
 
@@ -33,8 +34,8 @@ print(match.group(1))
 PY
 }
 
-sync_s3() {
-  local build_dir="$ROOT_DIR/firmware/.pio/build/$S3_ENV"
+sync_s3_legacy() {
+  local build_dir="$ROOT_DIR/firmware/.pio/build/$S3_LEGACY_ENV"
   local out_dir="$SITE_FIRMWARE_DIR/esp32-s3"
   mkdir -p "$out_dir"
   # Keep legacy flat paths in sync with the stable S3 line for backward
@@ -48,7 +49,48 @@ sync_s3() {
   cp "$build_dir/firmware.bin" "$out_dir/lumentree-ble-bridge.bin"
   cp "$BOOT_APP0" "$out_dir/boot_app0.bin"
   local version
-  version="$(parse_version "$S3_ENV")"
+  version="$(parse_version "$S3_LEGACY_ENV")"
+  cat > "$out_dir/flash-manifest.json" <<EOF
+{
+  "name": "Lumentree Local BLE Bridge",
+  "version": "$version",
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "lumentree-ble-bridge.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}
+EOF
+}
+
+sync_s3_preview() {
+  local build_dir="$ROOT_DIR/firmware/.pio/build/$S3_PREVIEW_ENV"
+  local out_dir="$SITE_FIRMWARE_DIR/esp32-s3-preview"
+  mkdir -p "$out_dir"
+  cp "$build_dir/bootloader.bin" "$out_dir/bootloader.bin"
+  cp "$build_dir/partitions.bin" "$out_dir/partitions.bin"
+  cp "$build_dir/firmware.bin" "$out_dir/lumentree-ble-bridge.bin"
+  cp "$BOOT_APP0" "$out_dir/boot_app0.bin"
+  local version
+  version="$(parse_version "$S3_PREVIEW_ENV")"
   cat > "$out_dir/flash-manifest.json" <<EOF
 {
   "name": "Lumentree Local BLE Bridge",
@@ -116,13 +158,18 @@ sync_c3() {
 EOF
 }
 
-sync_s3
+sync_s3_legacy
+sync_s3_preview
 sync_c3
+
+legacy_version="$(parse_version "$S3_LEGACY_ENV")"
+preview_version="$(parse_version "$S3_PREVIEW_ENV")"
+c3_version="$(parse_version "$C3_ENV")"
 
 cat > "$SITE_FIRMWARE_DIR/flash-manifest.json" <<EOF
 {
   "name": "Lumentree Local BLE Bridge",
-  "version": "$(parse_version "$S3_ENV")",
+  "version": "legacy-s3-$legacy_version preview-s3-$preview_version c3-$c3_version",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
@@ -141,6 +188,27 @@ cat > "$SITE_FIRMWARE_DIR/flash-manifest.json" <<EOF
         },
         {
           "path": "esp32-s3/lumentree-ble-bridge.bin",
+          "offset": 65536
+        }
+      ]
+    },
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "esp32-s3-preview/bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "esp32-s3-preview/partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "esp32-s3-preview/boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "esp32-s3-preview/lumentree-ble-bridge.bin",
           "offset": 65536
         }
       ]
@@ -167,5 +235,6 @@ cat > "$SITE_FIRMWARE_DIR/flash-manifest.json" <<EOF
 EOF
 
 echo "Synced flash-site artifacts for:"
-echo "  - $S3_ENV -> $SITE_FIRMWARE_DIR/esp32-s3"
+echo "  - $S3_LEGACY_ENV -> $SITE_FIRMWARE_DIR/esp32-s3"
+echo "  - $S3_PREVIEW_ENV -> $SITE_FIRMWARE_DIR/esp32-s3-preview"
 echo "  - $C3_ENV -> $SITE_FIRMWARE_DIR/esp32-c3"

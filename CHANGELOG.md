@@ -12,6 +12,13 @@ This project follows a simple release flow for HACS:
 
 - No unreleased changes.
 
+## [0.14.18] - 2026-05-26
+
+### Fixed
+
+- Made the Home Assistant coordinator resilient to slow local-server endpoints so one timeout no longer turns the whole integration unavailable.
+- Split fast and slow fetch cadence inside the integration and reused the last good optional payload when `energy`, `settings`, `command status`, or `write grant` endpoints are briefly slow.
+
 ## [0.14.11] - 2026-05-20
 
 ### Added
