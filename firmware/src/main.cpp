@@ -156,6 +156,7 @@ static bool telemetryUploadsDisabled = LUMENTREE_DISABLE_TELEMETRY_UPLOADS != 0;
 static bool telemetryTaskEnabled = LUMENTREE_USE_TELEMETRY_TASK != 0;
 static bool commandPollingDisabled = LUMENTREE_DISABLE_COMMAND_POLLING != 0;
 static bool commandPollTaskEnabled = LUMENTREE_USE_COMMAND_POLL_TASK != 0;
+static bool bleConnectionEnabled = true;
 static bool provisioningPortalActive = false;
 static bool portalServerStarted = false;
 static bool mdnsStarted = false;
@@ -381,6 +382,7 @@ static bool applyLanConfig(
   bool restartWifi,
   String& error
 );
+static void setBleConnectionEnabled(bool enabled, const char* reason);
 static bool lanUpdateSupported();
 static bool beginLanFirmwareUpdate(const String& filename, String& error);
 static bool writeLanFirmwareChunk(const uint8_t* data, size_t length, String& error);
@@ -810,6 +812,9 @@ static void invalidateModbusSession(const char* reason) {
 }
 
 static bool ensureModbusSession() {
+  if (!bleConnectionEnabled) {
+    return false;
+  }
   if (targetMac.length() == 0) {
     emitError("target_not_set", "run SET_TARGET before reading BLE Modbus data");
     return false;
@@ -1234,6 +1239,10 @@ static bool updateMainTelemetrySnapshotFromCache(const char* safety) {
 }
 
 static bool runFastMainCacheScheduler(unsigned long now) {
+  if (!bleConnectionEnabled) {
+    nextUploadMs = millis() + telemetryIntervalMs();
+    return true;
+  }
   bool fullRefreshDue = !mainTelemetryCache.valid
     || nextMainFullRefreshMs == 0
     || (long)(now - nextMainFullRefreshMs) >= 0;
@@ -1301,6 +1310,7 @@ static bool isAllowedLanCommand(const String& line) {
     || line.startsWith("SET_DEVICE_ID ")
     || line.startsWith("SET_TARGET_MAC ")
     || line.startsWith("SET_WIFI ")
+    || line.startsWith("SET_BLE_CONNECTION ")
     || line.startsWith("SET_PRODUCTION ")
     || line.startsWith("SET_BACKGROUND_TELEMETRY ")
     || line.startsWith("SET_TELEMETRY_UPLOADS ");
@@ -1322,6 +1332,7 @@ static void loadConfig() {
   uploadIntervalSeconds = prefs.getUShort("upload_s", DEFAULT_UPLOAD_INTERVAL_SECONDS);
   productionEnabled = prefs.getBool("prod", LUMENTREE_DEFAULT_PRODUCTION_ENABLED != 0);
   tlsInsecure = prefs.getBool("tls_insec", LUMENTREE_DEFAULT_TLS_INSECURE != 0);
+  bleConnectionEnabled = prefs.getBool("ble_en", true);
   uploadIntervalSeconds = (uint16_t)constrain(uploadIntervalSeconds, MIN_UPLOAD_INTERVAL_SECONDS, 3600);
   targetAddressTypeKnown = targetMac.length() > 0;
   pairingStatus = targetMac.length() > 0 ? "paired" : "unconfigured";
@@ -1423,6 +1434,14 @@ static bool applyLanConfig(
   }
 
   return true;
+}
+
+static void setBleConnectionEnabled(bool enabled, const char* reason) {
+  bleConnectionEnabled = enabled;
+  prefs.putBool("ble_en", bleConnectionEnabled);
+  if (!bleConnectionEnabled) {
+    resetModbusSession(reason != nullptr ? reason : "ble_disabled");
+  }
 }
 
 static void emitConfig(const char* type) {
@@ -1661,6 +1680,12 @@ static void sendPortalPage() {
     page += F(
       "</b><br><span style='color:#8da0ad'>IP is only a fallback if .local does not resolve on your network.</span></p></section>"
       "<section><div class='actions'><button type='button' onclick='bleScan()'>Scan BLE</button><button type='button' class='secondary' onclick='status()'>Refresh Status</button></div><div id='summary'></div></section>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Wi-Fi Config</h2><form onsubmit='saveLocalConfig(event)'><label>Wi-Fi SSID</label><input id='local_ssid' name='local_ssid' value='"
+    );
+    page += htmlEscape(wifiSsid);
+    page += F(
+      "'><label>Wi-Fi Password</label><input id='local_pass' name='local_pass' type='password' placeholder='Leave blank to keep current password'><button type='submit'>Save Wi-Fi On LAN</button></form></section>"
+      "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>BLE Session</h2><div class='actions'><button type='button' onclick='setBleConnection(true)'>Enable BLE</button><button type='button' class='secondary' onclick='setBleConnection(false)'>Disable BLE</button></div><p>Disabling BLE keeps local web and server connectivity alive, but stops inverter reads until BLE is enabled again.</p></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>BLE Candidates</h2><div id='ble'></div></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>LAN Control</h2><div class='actions'><button type='button' onclick='runCommand(`STATUS`)'>STATUS</button><button type='button' class='secondary' onclick='runCommand(`READ_MAIN_ONCE`)'>READ MAIN</button><button type='button' class='secondary' onclick='readLogs()'>Refresh Logs</button><button type='button' class='secondary' onclick='rebootDevice()'>Reboot</button></div><label>Command</label><input id='cmd' placeholder='READ_RANGE 0 10'><button type='button' onclick='submitCommand()'>Run Command</button></section>"
       "<section><h2 style='font-size:17px;margin:0 0 6px;color:#e8edf2'>Firmware Update</h2><p>Upload a matching firmware .bin over LAN. This target uses OTA app slots, so the new image is written to the inactive slot and the device reboots into it after a successful upload.</p><input id='fwbin' type='file' accept='.bin'><button type='button' onclick='uploadFirmware()'>Upload Firmware</button></section>"
@@ -1672,7 +1697,7 @@ static void sendPortalPage() {
     "<pre id='out'></pre><script>"
     "function q(id){return document.getElementById(id)}"
     "function scan(){fetch('/api/scan').then(r=>r.json()).then(d=>{let n=q('nets');if(!n)return;n.innerHTML=(d.networks||[]).map(x=>`<div class=net onclick=\\\"q('ssid').value='${x.ssid.replace(/'/g,'&#39;')}'\\\">${x.ssid}<small>${x.rssi} dBm ${x.secure?'locked':'open'}</small></div>`).join('')||'<div class=net>No networks</div>'})}"
-    "function renderSummary(d){let s=q('summary');if(!s)return;s.innerHTML=`<p>Gateway: <b>${d.gateway_id||'unknown'}</b><br>Local URL: <b>${d.local_url||'n/a'}</b><br>Wi-Fi: <b>${d.wifi_connected?'connected':'disconnected'}</b><br>IP fallback: <b>${d.ip||'n/a'}</b><br>Device ID: <b>${d.device_id||'unbound'}</b><br>Target MAC: <b>${d.target_mac||'unbound'}</b><br>Pairing: <b>${d.pairing_status||'unknown'}</b></p>`}"
+    "function renderSummary(d){let s=q('summary');if(!s)return;s.innerHTML=`<p>Gateway: <b>${d.gateway_id||'unknown'}</b><br>Local URL: <b>${d.local_url||'n/a'}</b><br>Wi-Fi: <b>${d.wifi_connected?'connected':'disconnected'}</b><br>IP fallback: <b>${d.ip||'n/a'}</b><br>BLE enabled: <b>${d.ble_connection_enabled?'yes':'no'}</b><br>BLE session: <b>${d.ble_session_connected?'connected':'idle'}</b><br>Device ID: <b>${d.device_id||'unbound'}</b><br>Target MAC: <b>${d.target_mac||'unbound'}</b><br>Pairing: <b>${d.pairing_status||'unknown'}</b></p>`;let ls=q('local_ssid');if(ls&&d.wifi_configured&&(!ls.value||ls.value!==d.wifi_ssid)){ls.value=d.wifi_ssid||''}}"
     "function esc(v){return String(v||'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[m]))}"
     "function renderBle(d){let b=q('ble');if(!b)return;let list=d.candidates||[];b.innerHTML=list.map((x,i)=>`<div class=net><b>${esc(x.name||x.mac)}</b><small>${esc(x.mac)} address_type=${x.address_type}</small><small>${x.rssi} dBm score ${x.score||0}</small><button type='button' onclick='selectCandidateByIndex(${i})'>Use This Device</button></div>`).join('')||'<div class=net>No candidates yet</div>'}"
     "function selectCandidateByIndex(index){fetch('/api/status').then(r=>r.json()).then(d=>{let list=d.candidates||[];if(index<0||index>=list.length){throw new Error('candidate index out of range')}let x=list[index];return selectCandidate(x.name||'',x.mac||'',x.address_type||0)})}"
@@ -1685,6 +1710,8 @@ static void sendPortalPage() {
     "function readLogs(){fetch('/api/logs').then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)})}"
     "function rebootDevice(){q('out').textContent='Rebooting...';fetch('/api/reboot',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)})}"
     "function uploadFirmware(){let file=q('fwbin').files[0];if(!file){q('out').textContent='Select a .bin file first';return}fetch('/api/status').then(r=>r.json()).then(s=>{if(!s.lan_update_supported){throw new Error('Current firmware layout does not support LAN firmware update on this board')}let data=new FormData();data.append('firmware',file);q('out').textContent='Uploading firmware...';return fetch('/api/update',{method:'POST',body:data})}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)}).catch(e=>{q('out').textContent=String(e)})}"
+    "function saveLocalConfig(e){e.preventDefault();let data={ssid:q('local_ssid').value,password:q('local_pass').value,restart_wifi:true,reboot:false};fetch('/api/configure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);q('local_pass').value='';setTimeout(status,1000)})}"
+    "function setBleConnection(enabled){q('out').textContent=(enabled?'Enabling':'Disabling')+' BLE...';fetch('/api/ble_connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:enabled})}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);setTimeout(status,800)})}"
     "function readToken(){q('out').textContent='Generating read pairing token...';fetch('/api/read_token',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderRead(d)})}"
     "function writeCode(){q('out').textContent='Generating write pairing token...';fetch('/api/write_code',{method:'POST'}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2);renderWrite(d)})}"
     "function saveWifi(e){e.preventDefault();let data={ssid:q('ssid').value,password:q('pass').value};fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()).then(d=>{q('out').textContent=JSON.stringify(d,null,2)})}"
@@ -1708,6 +1735,7 @@ static void setupProvisioningWebServer() {
     doc["mode"] = provisioningPortalActive ? "AP" : "STA";
     doc["ap_ssid"] = provisioningApSsid;
     doc["wifi_configured"] = wifiSsid.length() > 0;
+    doc["wifi_ssid"] = wifiSsid.length() > 0 ? wifiSsid : "";
     doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
     doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
     doc["local_hostname"] = localHostname;
@@ -1739,6 +1767,8 @@ static void setupProvisioningWebServer() {
     doc["settings_poll_interval_ms"] = SETTINGS_UPLOAD_INTERVAL_MS;
     doc["command_polling_disabled"] = commandPollingDisabled;
     doc["command_poll_task_enabled"] = commandPollTaskEnabled;
+    doc["ble_connection_enabled"] = bleConnectionEnabled;
+    doc["ble_session_connected"] = modbusClient != nullptr && modbusClient->isConnected() && modbusCharacteristic != nullptr;
     doc["lan_update_supported"] = lanUpdateSupported();
     JsonArray runtimeProbesJson = doc["runtime_probes"].to<JsonArray>();
     addRuntimeProbeJson(runtimeProbesJson);
@@ -2102,6 +2132,7 @@ static void setupProvisioningWebServer() {
     result["ok"] = true;
     result["rebooting"] = reboot;
     result["wifi_restarted"] = restartWifi && (nextSsid != nullptr || nextPassword != nullptr);
+    result["wifi_ssid"] = wifiSsid;
     result["device_id"] = deviceId;
     result["target_mac"] = targetMac;
     result["gateway_id"] = gatewayId;
@@ -2114,6 +2145,26 @@ static void setupProvisioningWebServer() {
       delay(500);
       ESP.restart();
     }
+  });
+
+  server.on("/api/ble_connection", HTTP_POST, []() {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, server.arg("plain"));
+    if (error || !doc["enabled"].is<bool>()) {
+      server.send(400, "application/json", "{\"ok\":false,\"error\":\"enabled boolean is required\"}");
+      return;
+    }
+    bool enabled = doc["enabled"].as<bool>();
+    setBleConnectionEnabled(enabled, enabled ? "ble_enabled_via_lan" : "ble_disabled_via_lan");
+    JsonDocument result;
+    result["ok"] = true;
+    result["ble_connection_enabled"] = bleConnectionEnabled;
+    result["ble_session_connected"] = modbusClient != nullptr && modbusClient->isConnected() && modbusCharacteristic != nullptr;
+    result["device_id"] = deviceId;
+    result["target_mac"] = targetMac;
+    String body;
+    serializeJson(result, body);
+    server.send(200, "application/json", body);
   });
 
   server.onNotFound(sendPortalPage);
@@ -4564,6 +4615,7 @@ static void printHelp() {
   printLine("# SET_UPLOAD_INTERVAL seconds");
   printLine("# SET_TLS_INSECURE 0|1");
   printLine("# SET_PRODUCTION 0|1");
+  printLine("# SET_BLE_CONNECTION 0|1");
   printLine("# START_AP");
   printLine("# WRITE_STATUS");
   printLine("# GENERATE_WRITE_CODE");
@@ -4946,6 +4998,10 @@ static void handleCommand(String line) {
     int value = line.substring(25).toInt();
     backgroundTelemetryDisabled = value == 0 ? false : true;
     emitAck("SET_BACKGROUND_TELEMETRY");
+  } else if (line.startsWith("SET_BLE_CONNECTION ")) {
+    int value = line.substring(19).toInt();
+    setBleConnectionEnabled(value != 0, value != 0 ? "ble_enabled_via_command" : "ble_disabled_via_command");
+    emitAck("SET_BLE_CONNECTION");
   } else if (line.startsWith("SET_TELEMETRY_UPLOADS ")) {
     int value = line.substring(22).toInt();
     telemetryUploadsDisabled = value == 0 ? false : true;
