@@ -111,3 +111,36 @@
 - Do not widen this into a larger auth or server refactor unless the user asks.
 - Keep bearer-token auth on the local API; changing HA routing from public to
   local origin is an operational hardening step, not a security rollback.
+
+## ESP32-S3 Current Runtime Line (Latest Session)
+
+- Latest validated active line is now on `ESP32-S3` (test/runtime line), not
+  replacing the `ESP32-C3` LAN baseline yet.
+- Current S3 runtime profile:
+  - env: `esp32-s3-8mb-fastbulk-task-poll3s`
+  - command poll: `3000 ms`
+  - upload interval: `3 s`
+  - main full refresh: `60000 ms`
+  - settings poll: `180000 ms`
+- Timing knobs are now env-driven for this line (do not re-hardcode fixed
+  timing values in firmware).
+
+## SSE Push Baseline (Server -> HA)
+
+- Local server now supports SSE telemetry stream:
+  - `GET /api/lumentree/devices/{device_id}/stream`
+- HA integration `lumentreelocal` now subscribes to SSE in background and keeps
+  polling fallback.
+- If future sessions touch this area:
+  - keep SSE reconnect behavior
+  - keep polling fallback path
+  - avoid startup blocking by using HA background task APIs for long-running
+    stream listeners.
+
+## Known Warning Artifact (Not Runtime Bug)
+
+- A prior warning burst in HA:
+  - `homeassistant.components.http.ban`
+  - invalid auth requests from `192.168.122.1` to `/api/`
+  came from manual unauthenticated curl probes during HA reboot checks.
+- Treat that as operator test artifact, not inverter/BLE/SSE failure.

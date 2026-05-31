@@ -62,3 +62,18 @@ After choosing a checkout, immediately read:
 
 - `/home/mrlinh/esp32-lumentree/START_HERE.md`
 - or `/home/mrlinh/esp32-lumentree-public/START_HERE.md`
+
+## Current Private Runtime Baseline (2026-05-31)
+
+- Latest private runtime branch head includes:
+  - S3 poll3s env-driven telemetry timing
+  - server SSE stream endpoint
+  - HA SSE listener with polling fallback
+- Final session report:
+  - `/home/mrlinh/esp32-lumentree/docs/status/2026-05-31-s3-sse-rollout-and-stability-final.md`
+- Final S3 firmware bin from this session:
+  - `/home/mrlinh/esp32-lumentree/firmware/bin/s3/lumentree-s3-poll3s-sse-envdriven-a180f64.bin`
+- First checks for next session:
+  1. `curl http://127.0.0.1:8787/health`
+  2. `curl http://192.168.1.151/api/status`
+  3. verify HA integration against local server origin (not Cloudflare path)

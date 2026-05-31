@@ -52,3 +52,13 @@ platformio device list
 - Backup artifacts chỉ đặt trong `docs/evidence/device-backups/archives/`
 - Không để file `.tar.gz` ở root repo
 - Trước khi flash production-like: commit trước, flash sau
+
+## Baseline chốt hiện tại (2026-05-31)
+
+- `ESP32-S3` line đã có:
+  - timing env-driven (không hardcode cứng interval)
+  - SSE từ local server sang HA integration + polling fallback
+- Bin S3 chốt:
+  - `firmware/bin/s3/lumentree-s3-poll3s-sse-envdriven-a180f64.bin`
+- Báo cáo session:
+  - `docs/status/2026-05-31-s3-sse-rollout-and-stability-final.md`
