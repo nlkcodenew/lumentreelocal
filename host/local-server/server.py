@@ -12,6 +12,7 @@ import os
 import secrets
 import sys
 import socket
+import time
 from datetime import date, datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -2337,6 +2338,30 @@ def make_handler(app: LumentreeServer):
         )
         return False
 
+    def begin_sse(self) -> bool:
+      try:
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        self.wfile.write(b"retry: 3000\n\n")
+        self.wfile.flush()
+        return True
+      except (BrokenPipeError, ConnectionResetError, socket.timeout):
+        return False
+
+    def send_sse_event(self, event: str, data: dict[str, Any]) -> bool:
+      try:
+        payload = json.dumps(data, default=json_default, separators=(",", ":"))
+        self.wfile.write(f"event: {event}\n".encode("utf-8"))
+        self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
+        self.wfile.flush()
+        return True
+      except (BrokenPipeError, ConnectionResetError, socket.timeout):
+        return False
+
     def read_json(self) -> dict[str, Any]:
       length = int(self.headers.get("Content-Length", "0"))
       if length <= 0:
@@ -2415,6 +2440,37 @@ def make_handler(app: LumentreeServer):
             return
           self.send_json(HTTPStatus.OK, sanitize_latest_response(latest))
           return
+
+        stream_prefix = "/api/lumentree/devices/"
+        stream_suffix = "/stream"
+        if path.startswith(stream_prefix) and path.endswith(stream_suffix):
+          device_id = unquote(path[len(stream_prefix) : -len(stream_suffix)])
+          if not self.require_device_read_auth(device_id):
+            return
+          query = parse_qs(parsed.query)
+          poll_seconds = float(query.get("poll_seconds", ["1.0"])[0])
+          heartbeat_seconds = float(query.get("heartbeat_seconds", ["15.0"])[0])
+          poll_seconds = min(max(poll_seconds, 0.2), 5.0)
+          heartbeat_seconds = min(max(heartbeat_seconds, 5.0), 60.0)
+          if not self.begin_sse():
+            return
+          last_emit_id = None
+          last_heartbeat = 0.0
+          while True:
+            latest = app.latest(device_id)
+            sanitized = sanitize_latest_response(latest)
+            if isinstance(sanitized, dict):
+              current_id = sanitized.get("id")
+              if current_id is not None and current_id != last_emit_id:
+                if not self.send_sse_event("telemetry", sanitized):
+                  return
+                last_emit_id = current_id
+            now = time.monotonic()
+            if now - last_heartbeat >= heartbeat_seconds:
+              if not self.send_sse_event("heartbeat", {"device_id": device_id, "ts": utc_now()}):
+                return
+              last_heartbeat = now
+            time.sleep(poll_seconds)
 
         settings_prefix = "/api/lumentree/devices/"
         settings_suffix = "/settings"

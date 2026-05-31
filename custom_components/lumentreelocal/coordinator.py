@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from time import monotonic
 from typing import Any
 
@@ -45,6 +46,27 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._aux_cache: dict[str, dict[str, Any]] = {}
         self._last_fetch_error: str | None = None
         self._last_warning_at: dict[str, float] = {}
+        self._stream_task: asyncio.Task[None] | None = None
+        self._stream_stop = asyncio.Event()
+        self._last_stream_refresh_at = 0.0
+
+    async def async_start_stream(self) -> None:
+        """Start background SSE listener."""
+        if self._stream_task and not self._stream_task.done():
+            return
+        self._stream_stop.clear()
+        self._stream_task = self.hass.async_create_task(self._stream_loop())
+
+    async def async_stop_stream(self) -> None:
+        """Stop background SSE listener."""
+        self._stream_stop.set()
+        if self._stream_task:
+            self._stream_task.cancel()
+            try:
+                await self._stream_task
+            except asyncio.CancelledError:
+                pass
+            self._stream_task = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         latest = await self._fetch_latest_resilient()
@@ -275,6 +297,26 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if isinstance(command, dict) and command.get("status") in {"requested", "sent"}:
                 next_interval = FAST_COMMAND_SCAN_INTERVAL
         self.update_interval = next_interval
+
+    async def _stream_loop(self) -> None:
+        """Listen for telemetry push events and trigger fast refreshes."""
+        while not self._stream_stop.is_set():
+            try:
+                async for item in self.client.latest_stream(self.device_id):
+                    if self._stream_stop.is_set():
+                        return
+                    if item.get("event") != "telemetry":
+                        continue
+                    now = monotonic()
+                    if now - self._last_stream_refresh_at < 0.8:
+                        continue
+                    self._last_stream_refresh_at = now
+                    await self.async_request_refresh()
+            except asyncio.CancelledError:
+                return
+            except (LumentreeLocalApiError, LumentreeLocalAuthError) as err:
+                LOGGER.debug("SSE stream reconnect for %s: %s", self.device_id, err)
+            await asyncio.sleep(2)
 
     def _maybe_notify_pairing_status(self, health: dict[str, Any]) -> None:
         """Create one-shot user notifications for actionable pairing states."""

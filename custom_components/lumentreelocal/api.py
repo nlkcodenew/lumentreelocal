@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+import json
 from typing import Any
 
 from aiohttp import ClientError, ClientSession
@@ -126,6 +128,47 @@ class LumentreeLocalApiClient:
     async def latest(self, device_id: str) -> dict[str, Any]:
         """Fetch latest metrics for one device."""
         return await self._get(f"/api/lumentree/devices/{device_id}/latest")
+
+    async def latest_stream(self, device_id: str) -> AsyncIterator[dict[str, Any]]:
+        """Stream latest telemetry updates via SSE."""
+        url = f"{self._api_url}/api/lumentree/devices/{device_id}/stream"
+        try:
+            async with self._session.get(url, headers=self._headers(), timeout=None) as response:
+                if response.status in (401, 403):
+                    raise LumentreeLocalAuthError("invalid API token")
+                if response.status >= 400:
+                    text = await response.text()
+                    raise LumentreeLocalApiError(
+                        f"GET /api/lumentree/devices/{device_id}/stream failed: "
+                        f"{response.status} {self._summarize_error_text(text)}"
+                    )
+
+                event_name = "message"
+                data_lines: list[str] = []
+                async for raw_line in response.content:
+                    line = raw_line.decode("utf-8", errors="ignore").strip("\r\n")
+                    if line == "":
+                        if data_lines:
+                            payload_text = "\n".join(data_lines)
+                            try:
+                                payload = json.loads(payload_text)
+                            except json.JSONDecodeError:
+                                payload = {"raw": payload_text}
+                            yield {"event": event_name, "data": payload}
+                        event_name = "message"
+                        data_lines = []
+                        continue
+                    if line.startswith(":"):
+                        continue
+                    if line.startswith("event:"):
+                        event_name = line[6:].strip() or "message"
+                        continue
+                    if line.startswith("data:"):
+                        data_lines.append(line[5:].lstrip())
+        except LumentreeLocalApiError:
+            raise
+        except (ClientError, TimeoutError) as err:
+            raise LumentreeLocalApiError(f"cannot connect to local Lumentree server: {err}") from err
 
     async def settings(self, device_id: str) -> dict[str, Any]:
         """Fetch latest settings snapshot for one device."""
