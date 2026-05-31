@@ -22,6 +22,6 @@ SERVICE_SET_DISCHARGE_TIME_START = "set_discharge_time_start"
 SERVICE_SET_DISCHARGE_TIME_END = "set_discharge_time_end"
 
 DEFAULT_API_URL = "https://lumentree.jonah.io.vn"
-DEFAULT_SCAN_INTERVAL = timedelta(seconds=10)
+DEFAULT_SCAN_INTERVAL = timedelta(seconds=5)
 FAST_COMMAND_SCAN_INTERVAL = timedelta(seconds=2)
 SWITCH_WRITE_CONFIRM_TIMEOUT_SECONDS = 25
