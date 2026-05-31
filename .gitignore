@@ -23,3 +23,6 @@ SESSION_HANDOFF.md
 *.bak
 *.tmp
 *.swp
+
+# Keep backup archives out of repo root.
+/*.tar.gz
