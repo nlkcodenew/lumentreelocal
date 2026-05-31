@@ -196,6 +196,7 @@ static String runtimeLogBuffer[RUNTIME_LOG_BUFFER_SIZE];
 static size_t runtimeLogNextIndex = 0;
 static size_t runtimeLogCount = 0;
 static bool otaInProgress = false;
+static bool otaMaintenanceMode = false;
 static bool otaLastOk = false;
 static bool otaAwaitingValidation = false;
 static bool otaValidationDone = false;
@@ -425,6 +426,7 @@ static void modbusNotifyCallback(BLERemoteCharacteristic* chr, uint8_t* data, si
 static void printJson(JsonDocument& doc);
 static void appendRuntimeLogLine(const String& line);
 static bool otaSupported();
+static void setOtaMaintenanceMode(bool enabled);
 static bool performOtaFromUrl(const String& url, const String& md5, String& errorMessage);
 static void maybeValidateOtaBoot();
 static void emitHttpClientDiag(const char* lane, const char* phase, const String& endpoint, int httpStatus, size_t bodyLength);
@@ -1250,6 +1252,19 @@ static bool otaSupported() {
   return running != nullptr && update != nullptr;
 }
 
+static void setOtaMaintenanceMode(bool enabled) {
+  otaMaintenanceMode = enabled;
+  if (enabled) {
+    backgroundTelemetryDisabled = true;
+    telemetryUploadsDisabled = true;
+    commandPollingDisabled = true;
+  } else {
+    backgroundTelemetryDisabled = LUMENTREE_DISABLE_BACKGROUND_TELEMETRY != 0;
+    telemetryUploadsDisabled = LUMENTREE_DISABLE_TELEMETRY_UPLOADS != 0;
+    commandPollingDisabled = LUMENTREE_DISABLE_COMMAND_POLLING != 0;
+  }
+}
+
 static bool performOtaFromUrl(const String& url, const String& md5, String& errorMessage) {
   errorMessage = "";
   if (!otaSupported()) {
@@ -1264,7 +1279,9 @@ static bool performOtaFromUrl(const String& url, const String& md5, String& erro
     errorMessage = "wifi is not connected";
     return false;
   }
+  setOtaMaintenanceMode(true);
   if (!lockHttpOperation(HTTP_BUSY_SKIP_TIMEOUT_MS)) {
+    setOtaMaintenanceMode(false);
     errorMessage = "HTTP lane is busy";
     return false;
   }
@@ -1297,6 +1314,7 @@ static bool performOtaFromUrl(const String& url, const String& md5, String& erro
   if (!beginOk) {
     unlockHttpOperation();
     otaInProgress = false;
+    setOtaMaintenanceMode(false);
     errorMessage = "OTA HTTP begin failed";
     otaLastError = errorMessage;
     JsonDocument fail;
@@ -1312,6 +1330,7 @@ static bool performOtaFromUrl(const String& url, const String& md5, String& erro
     http.end();
     unlockHttpOperation();
     otaInProgress = false;
+    setOtaMaintenanceMode(false);
     errorMessage = "OTA download failed, http status " + String(status);
     otaLastError = errorMessage;
     JsonDocument fail;
@@ -1328,6 +1347,7 @@ static bool performOtaFromUrl(const String& url, const String& md5, String& erro
     http.end();
     unlockHttpOperation();
     otaInProgress = false;
+    setOtaMaintenanceMode(false);
     errorMessage = "Update.begin failed: " + String(Update.errorString());
     otaLastError = errorMessage;
     return false;
@@ -1337,6 +1357,7 @@ static bool performOtaFromUrl(const String& url, const String& md5, String& erro
     http.end();
     unlockHttpOperation();
     otaInProgress = false;
+    setOtaMaintenanceMode(false);
     errorMessage = "invalid md5 format";
     otaLastError = errorMessage;
     return false;
@@ -1366,6 +1387,7 @@ static bool performOtaFromUrl(const String& url, const String& md5, String& erro
       http.end();
       unlockHttpOperation();
       otaInProgress = false;
+      setOtaMaintenanceMode(false);
       errorMessage = "OTA write failed";
       otaLastError = errorMessage;
       return false;
@@ -1381,6 +1403,7 @@ static bool performOtaFromUrl(const String& url, const String& md5, String& erro
     http.end();
     unlockHttpOperation();
     otaInProgress = false;
+    setOtaMaintenanceMode(false);
     errorMessage = "written bytes mismatch";
     otaLastError = errorMessage;
     return false;
@@ -1389,6 +1412,7 @@ static bool performOtaFromUrl(const String& url, const String& md5, String& erro
     http.end();
     unlockHttpOperation();
     otaInProgress = false;
+    setOtaMaintenanceMode(false);
     errorMessage = "Update.end failed: " + String(Update.errorString());
     otaLastError = errorMessage;
     return false;
@@ -1925,6 +1949,7 @@ static void setupProvisioningWebServer() {
     doc["ble_session_connected"] = modbusClient != nullptr && modbusClient->isConnected() && modbusCharacteristic != nullptr;
     doc["ota_supported"] = otaSupported();
     doc["ota_in_progress"] = otaInProgress;
+    doc["ota_maintenance_mode"] = otaMaintenanceMode;
     doc["ota_last_ok"] = otaLastOk;
     doc["ota_last_error"] = otaLastError;
     doc["ota_last_url"] = otaLastUrl;
@@ -1970,6 +1995,7 @@ static void setupProvisioningWebServer() {
     doc["ok"] = true;
     doc["ota_supported"] = otaSupported();
     doc["ota_in_progress"] = otaInProgress;
+    doc["ota_maintenance_mode"] = otaMaintenanceMode;
     doc["ota_last_ok"] = otaLastOk;
     doc["ota_last_error"] = otaLastError;
     doc["ota_last_url"] = otaLastUrl;
@@ -3894,6 +3920,10 @@ static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result) 
 
 static void pollPendingCommand() {
   uint32_t probeStartedMs = beginRuntimeProbe(PROBE_COMMAND_POLL);
+  if (otaInProgress || otaMaintenanceMode) {
+    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
+    return;
+  }
   if (commandPollingDisabled) {
     finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
     return;
@@ -4997,6 +5027,10 @@ static void runWifiScan() {
 
 static void maybeRunTelemetryScheduler() {
   uint32_t probeStartedMs = beginRuntimeProbe(PROBE_TELEMETRY_SCHEDULER);
+  if (otaInProgress || otaMaintenanceMode) {
+    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
+    return;
+  }
   if (!productionEnabled) {
     finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
     return;
