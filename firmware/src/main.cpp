@@ -1286,8 +1286,14 @@ static bool performOtaFromUrl(const String& url, const String& md5, String& erro
 
   HTTPClient http;
   WiFiClientSecure secureClient;
-  secureClient.setInsecure();
-  bool beginOk = http.begin(secureClient, url);
+  WiFiClient plainClient;
+  bool beginOk = false;
+  if (url.startsWith("https://")) {
+    secureClient.setInsecure();
+    beginOk = http.begin(secureClient, url);
+  } else {
+    beginOk = http.begin(plainClient, url);
+  }
   if (!beginOk) {
     unlockHttpOperation();
     otaInProgress = false;
@@ -1582,19 +1588,26 @@ static void setBleConnectionEnabled(bool enabled, const char* reason) {
   }
 }
 
+static bool wifiReadyForStatus() {
+  wifi_mode_t mode = WiFi.getMode();
+  return mode == WIFI_MODE_STA || mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA;
+}
+
 static void emitConfig(const char* type) {
   JsonDocument doc;
+  bool wifiReady = wifiReadyForStatus();
+  bool wifiConnected = wifiReady && WiFi.status() == WL_CONNECTED;
   doc["type"] = type;
   doc["fw"] = FW_NAME;
   doc["version"] = FW_VERSION;
   doc["uptime_ms"] = millis() - bootMs;
   doc["production_enabled"] = productionEnabled;
   doc["wifi_configured"] = wifiSsid.length() > 0;
-  doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
+  doc["wifi_connected"] = wifiConnected;
   doc["wifi_ssid"] = wifiSsid.length() > 0 ? wifiSsid : "";
-  doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "";
+  doc["ip"] = wifiConnected ? WiFi.localIP().toString() : "";
   doc["local_hostname"] = localHostname;
-  doc["local_url"] = WiFi.status() == WL_CONNECTED ? localPortalUrl() : "";
+  doc["local_url"] = wifiConnected ? localPortalUrl() : "";
   doc["api_url"] = apiUrl;
   doc["api_token_configured"] = apiToken.length() > 0;
   doc["device_id"] = deviceId;
@@ -1627,6 +1640,8 @@ static void emitConfig(const char* type) {
 
 static void emitStatus(const char* type) {
   JsonDocument doc;
+  bool wifiReady = wifiReadyForStatus();
+  bool wifiConnected = wifiReady && WiFi.status() == WL_CONNECTED;
   doc["type"] = type;
   doc["fw"] = FW_NAME;
   doc["version"] = FW_VERSION;
@@ -1645,10 +1660,10 @@ static void emitStatus(const char* type) {
   doc["device_id_name_hint"] = deviceId;
   doc["known_lumentree_service_uuid"] = KNOWN_LUMENTREE_SERVICE_UUID;
   doc["wifi_mode"] = productionEnabled ? "production_upload" : "manual";
-  doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
-  doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "";
+  doc["wifi_connected"] = wifiConnected;
+  doc["ip"] = wifiConnected ? WiFi.localIP().toString() : "";
   doc["local_hostname"] = localHostname;
-  doc["local_url"] = WiFi.status() == WL_CONNECTED ? localPortalUrl() : "";
+  doc["local_url"] = wifiConnected ? localPortalUrl() : "";
   doc["api_url"] = apiUrl;
   doc["api_token_configured"] = apiToken.length() > 0;
   doc["device_id"] = deviceId;
@@ -1726,7 +1741,7 @@ static String localPortalUrl() {
 }
 
 static void ensureMdnsStarted() {
-  if (WiFi.status() != WL_CONNECTED || localHostname.length() == 0) return;
+  if (!wifiReadyForStatus() || WiFi.status() != WL_CONNECTED || localHostname.length() == 0) return;
   if (mdnsStarted) return;
   if (!MDNS.begin(localHostname.c_str())) {
     emitError("mdns_start_failed", "could not start mDNS responder");
@@ -5160,15 +5175,17 @@ static void maybeEmitHeartbeat() {
   lastHeartbeatMs = now;
 
   JsonDocument doc;
+  bool wifiReady = wifiReadyForStatus();
+  bool wifiConnected = wifiReady && WiFi.status() == WL_CONNECTED;
   doc["type"] = "heartbeat";
   doc["fw"] = FW_NAME;
   doc["version"] = FW_VERSION;
   doc["uptime_ms"] = now - bootMs;
   doc["production_enabled"] = productionEnabled;
-  doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
+  doc["wifi_connected"] = wifiConnected;
   doc["wifi_ssid"] = wifiSsid;
-  doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "";
-  doc["rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
+  doc["ip"] = wifiConnected ? WiFi.localIP().toString() : "";
+  doc["rssi"] = wifiConnected ? WiFi.RSSI() : 0;
   doc["gateway_id"] = gatewayId;
   doc["target_mac"] = targetMac;
   doc["pairing_status"] = pairingStatus;
@@ -5382,11 +5399,10 @@ void setup() {
       printJson(otaBoot);
     }
   }
-  if (productionEnabled) {
-    WiFi.mode(WIFI_STA);
-    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
-  } else {
-    WiFi.mode(WIFI_OFF);
+  WiFi.mode(WIFI_STA);
+  esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+  if (!productionEnabled) {
+    WiFi.disconnect(true);
   }
   delay(100);
 
