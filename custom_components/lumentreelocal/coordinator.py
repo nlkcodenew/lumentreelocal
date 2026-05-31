@@ -55,7 +55,10 @@ class LumentreeLocalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._stream_task and not self._stream_task.done():
             return
         self._stream_stop.clear()
-        self._stream_task = self.hass.async_create_task(self._stream_loop())
+        self._stream_task = self.hass.async_create_background_task(
+            self._stream_loop(),
+            name=f"lumentreelocal_sse_{self.device_id}",
+        )
 
     async def async_stop_stream(self) -> None:
         """Stop background SSE listener."""
