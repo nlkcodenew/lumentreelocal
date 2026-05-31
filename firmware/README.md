@@ -121,12 +121,33 @@ cd /home/mrlinh/esp32-lumentree/firmware
 pio run -e esp32-s3-8mb-nopsram-release --project-conf platformio.ini
 ```
 
+Build C3 experimental poll-5s line:
+
+```bash
+cd /home/mrlinh/esp32-lumentree/firmware
+pio run -e esp32-c3-4mb-fastbulk-task-poll5s --project-conf platformio.ini
+```
+
 ## Flash
 
 ```bash
 cd /home/mrlinh/esp32-lumentree/firmware
 pio run -e esp32-s3-8mb-nopsram-release --project-conf platformio.ini -t upload --upload-port /dev/ttyACM0
 ```
+
+Flash C3 experimental poll-5s:
+
+```bash
+cd /home/mrlinh/esp32-lumentree/firmware
+pio run -e esp32-c3-4mb-fastbulk-task-poll5s --project-conf platformio.ini -t upload --upload-port /dev/ttyACM0
+```
+
+## Bin Output Layout
+
+- Source code stays in `firmware/src/`
+- Exported firmware binaries stay in `firmware/bin/`
+- Naming rule for exported bin:
+  `lumentree-<board>-<env>-<firmware-version>-<yyyymmdd-hhmm>.bin`
 
 After flash, validate with the runbook:
 
