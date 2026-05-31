@@ -100,6 +100,17 @@
 - This means future sessions should verify tunnel/public reachability before
   blaming the board, BLE cadence, or the local origin.
 
+## HAOS VM Local-Origin Detail
+
+- In the current single-host setup with HAOS VM on `192.168.122.230`, the
+  practical local-origin route is:
+  - `HAOS VM -> http://192.168.122.1:8787`
+- Local server service must bind host-wide (not loopback-only):
+  - `/etc/lumentree/local-server.env`
+  - `LUMENTREE_SERVER_HOST=0.0.0.0`
+- Do not set HA integration back to Cloudflare URL for internal polling unless
+  local-origin route is intentionally unavailable.
+
 ## Safe Direction For HA Networking
 
 - The stable architecture going forward is:

@@ -12,6 +12,23 @@ This project follows a simple release flow for HACS:
 
 - No unreleased changes.
 
+## [0.15.0] - 2026-05-31
+
+### Added
+
+- Added Server-Sent Events (SSE) telemetry stream support between local server and Home Assistant integration.
+- Added integration-side SSE listener with reconnect behavior while retaining polling fallback.
+
+### Changed
+
+- Reduced default integration polling interval from `10s` to `5s` for lower fallback latency.
+- Firmware timing controls for the S3 line are now env-driven (upload/poll/refresh intervals) instead of fixed hardcoded defaults in runtime flow.
+
+### Fixed
+
+- Fixed Home Assistant startup blocking risk by running the SSE listener as a background task.
+- Fixed local routing mismatch for HAOS VM by switching the local-server service bind host to an address reachable from both HA VM and host-side ESP upload path.
+
 ## [0.14.18] - 2026-05-26
 
 ### Fixed
