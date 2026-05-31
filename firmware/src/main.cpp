@@ -10,12 +10,10 @@
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
-#include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <esp_heap_caps.h>
-#include <esp_ota_ops.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
@@ -121,7 +119,7 @@ static const unsigned long AUTO_DISCOVERY_RETRY_MS = 60000;
 static const unsigned long COMMAND_POLL_INTERVAL_MS = LUMENTREE_COMMAND_POLL_INTERVAL_MS;
 static const unsigned long FAST_TELEMETRY_INTERVAL_MS = 5000;
 static const unsigned long TELEMETRY_UPLOAD_RETRY_BACKOFF_MS = 2000;
-static const unsigned long HTTPS_MIN_GAP_MS = 2500;
+static const unsigned long HTTPS_MIN_GAP_MS = 300;
 static const unsigned long TELEMETRY_BLE_GAP_MS = 1500;
 static const unsigned long WRITE_LANE_RESUME_DELAY_MS = 8000;
 static const uint32_t HTTP_BUSY_SKIP_TIMEOUT_MS = 25;
@@ -191,22 +189,6 @@ static unsigned long lastBleTelemetryActionMs = 0;
 static unsigned long telemetryResumeAfterWriteMs = 0;
 static bool forceMainFullRefresh = true;
 static uint16_t nextMainTelemetryStartRegister = 0;
-static const size_t RUNTIME_LOG_BUFFER_SIZE = 200;
-static String runtimeLogBuffer[RUNTIME_LOG_BUFFER_SIZE];
-static size_t runtimeLogNextIndex = 0;
-static size_t runtimeLogCount = 0;
-static bool otaInProgress = false;
-static bool otaMaintenanceMode = false;
-static bool otaLastOk = false;
-static bool otaAwaitingValidation = false;
-static bool otaValidationDone = false;
-static String otaLastError;
-static String otaLastUrl;
-static String otaLastVersion;
-static size_t otaLastWrittenBytes = 0;
-static unsigned long otaStartedMs = 0;
-static unsigned long otaFinishedMs = 0;
-static unsigned long otaBootValidateAfterMs = 0;
 static volatile bool modbusNotifyReceived = false;
 static volatile unsigned long modbusLastNotifyMs = 0;
 static uint16_t modbusNotifyCount = 0;
@@ -355,7 +337,6 @@ static void addCandidatesJson(JsonArray array);
 static void addRuntimeProbeJson(JsonArray array);
 static void addRuntimeTraceJson(JsonArray array);
 static bool runBleDiscovery(bool allowAutoBind);
-static bool ensureWifiConnected();
 static bool postGatewayCandidates();
 static bool postGatewayStatus(const char* reason);
 static bool postTelemetry(const String& payloadHex, uint16_t notifyCount, size_t payloadLength, uint16_t startRegister, uint16_t registerCount, const char* label, const char* safety);
@@ -424,11 +405,6 @@ static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result);
 static void maybeAccelerateAfterWriteCommand(const char* status, JsonDocument& result);
 static void modbusNotifyCallback(BLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify);
 static void printJson(JsonDocument& doc);
-static void appendRuntimeLogLine(const String& line);
-static bool otaSupported();
-static void setOtaMaintenanceMode(bool enabled);
-static bool performOtaFromUrl(const String& url, const String& md5, String& errorMessage);
-static void maybeValidateOtaBoot();
 static void emitHttpClientDiag(const char* lane, const char* phase, const String& endpoint, int httpStatus, size_t bodyLength);
 static void printLine(const String& line);
 static void emitError(const char* code, const char* message);
@@ -1210,18 +1186,8 @@ static bool runFastMainCacheScheduler(unsigned long now) {
 }
 
 static void printJson(JsonDocument& doc) {
-  String line;
-  serializeJson(doc, line);
-  Serial0.println(line);
-  appendRuntimeLogLine(line);
-}
-
-static void appendRuntimeLogLine(const String& line) {
-  runtimeLogBuffer[runtimeLogNextIndex] = line;
-  runtimeLogNextIndex = (runtimeLogNextIndex + 1) % RUNTIME_LOG_BUFFER_SIZE;
-  if (runtimeLogCount < RUNTIME_LOG_BUFFER_SIZE) {
-    runtimeLogCount++;
-  }
+  serializeJson(doc, Serial0);
+  Serial0.println();
 }
 
 static void emitHttpClientDiag(const char* lane, const char* phase, const String& endpoint, int httpStatus, size_t bodyLength) {
@@ -1244,226 +1210,6 @@ static void emitHttpClientDiag(const char* lane, const char* phase, const String
 
 static void printLine(const String& line) {
   Serial0.println(line);
-}
-
-static bool otaSupported() {
-  const esp_partition_t* running = esp_ota_get_running_partition();
-  const esp_partition_t* update = esp_ota_get_next_update_partition(nullptr);
-  return running != nullptr && update != nullptr;
-}
-
-static void setOtaMaintenanceMode(bool enabled) {
-  otaMaintenanceMode = enabled;
-  if (enabled) {
-    backgroundTelemetryDisabled = true;
-    telemetryUploadsDisabled = true;
-    commandPollingDisabled = true;
-  } else {
-    backgroundTelemetryDisabled = LUMENTREE_DISABLE_BACKGROUND_TELEMETRY != 0;
-    telemetryUploadsDisabled = LUMENTREE_DISABLE_TELEMETRY_UPLOADS != 0;
-    commandPollingDisabled = LUMENTREE_DISABLE_COMMAND_POLLING != 0;
-  }
-}
-
-static bool performOtaFromUrl(const String& url, const String& md5, String& errorMessage) {
-  errorMessage = "";
-  if (!otaSupported()) {
-    errorMessage = "OTA partition layout is not available on this board";
-    return false;
-  }
-  if (url.length() == 0) {
-    errorMessage = "url is required";
-    return false;
-  }
-  if (!ensureWifiConnected()) {
-    errorMessage = "wifi is not connected";
-    return false;
-  }
-  setOtaMaintenanceMode(true);
-  if (!lockHttpOperation(HTTP_BUSY_SKIP_TIMEOUT_MS)) {
-    setOtaMaintenanceMode(false);
-    errorMessage = "HTTP lane is busy";
-    return false;
-  }
-
-  otaInProgress = true;
-  otaLastOk = false;
-  otaLastError = "";
-  otaLastUrl = url;
-  otaStartedMs = millis();
-  otaFinishedMs = 0;
-  otaLastWrittenBytes = 0;
-
-  JsonDocument start;
-  start["type"] = "ota_start";
-  start["uptime_ms"] = millis() - bootMs;
-  start["url"] = url;
-  start["safety"] = "dual_slot_ota_with_pending_verify_rollback";
-  printJson(start);
-
-  HTTPClient http;
-  WiFiClientSecure secureClient;
-  WiFiClient plainClient;
-  bool beginOk = false;
-  if (url.startsWith("https://")) {
-    secureClient.setInsecure();
-    beginOk = http.begin(secureClient, url);
-  } else {
-    beginOk = http.begin(plainClient, url);
-  }
-  if (!beginOk) {
-    unlockHttpOperation();
-    otaInProgress = false;
-    setOtaMaintenanceMode(false);
-    errorMessage = "OTA HTTP begin failed";
-    otaLastError = errorMessage;
-    JsonDocument fail;
-    fail["type"] = "ota_failed";
-    fail["reason"] = errorMessage;
-    fail["uptime_ms"] = millis() - bootMs;
-    printJson(fail);
-    return false;
-  }
-
-  int status = http.GET();
-  if (status != HTTP_CODE_OK) {
-    http.end();
-    unlockHttpOperation();
-    otaInProgress = false;
-    setOtaMaintenanceMode(false);
-    errorMessage = "OTA download failed, http status " + String(status);
-    otaLastError = errorMessage;
-    JsonDocument fail;
-    fail["type"] = "ota_failed";
-    fail["reason"] = errorMessage;
-    fail["http_status"] = status;
-    fail["uptime_ms"] = millis() - bootMs;
-    printJson(fail);
-    return false;
-  }
-
-  int contentLength = http.getSize();
-  if (!Update.begin(contentLength > 0 ? (size_t)contentLength : UPDATE_SIZE_UNKNOWN, U_FLASH)) {
-    http.end();
-    unlockHttpOperation();
-    otaInProgress = false;
-    setOtaMaintenanceMode(false);
-    errorMessage = "Update.begin failed: " + String(Update.errorString());
-    otaLastError = errorMessage;
-    return false;
-  }
-  if (md5.length() > 0 && !Update.setMD5(md5.c_str())) {
-    Update.abort();
-    http.end();
-    unlockHttpOperation();
-    otaInProgress = false;
-    setOtaMaintenanceMode(false);
-    errorMessage = "invalid md5 format";
-    otaLastError = errorMessage;
-    return false;
-  }
-
-  WiFiClient* stream = http.getStreamPtr();
-  size_t written = 0;
-  int remaining = contentLength;
-  uint8_t buffer[2048];
-  while (http.connected() && (remaining > 0 || contentLength < 0)) {
-    feedWatchdog();
-    size_t available = stream->available();
-    if (available == 0) {
-      delay(5);
-      continue;
-    }
-    size_t toRead = available;
-    if (toRead > sizeof(buffer)) toRead = sizeof(buffer);
-    int readLen = stream->readBytes(buffer, toRead);
-    if (readLen <= 0) {
-      delay(1);
-      continue;
-    }
-    size_t writeLen = Update.write(buffer, (size_t)readLen);
-    if (writeLen != (size_t)readLen) {
-      Update.abort();
-      http.end();
-      unlockHttpOperation();
-      otaInProgress = false;
-      setOtaMaintenanceMode(false);
-      errorMessage = "OTA write failed";
-      otaLastError = errorMessage;
-      return false;
-    }
-    written += writeLen;
-    if (remaining > 0) {
-      remaining -= readLen;
-    }
-  }
-  otaLastWrittenBytes = written;
-  if (contentLength > 0 && written != (size_t)contentLength) {
-    Update.abort();
-    http.end();
-    unlockHttpOperation();
-    otaInProgress = false;
-    setOtaMaintenanceMode(false);
-    errorMessage = "written bytes mismatch";
-    otaLastError = errorMessage;
-    return false;
-  }
-  if (!Update.end(true)) {
-    http.end();
-    unlockHttpOperation();
-    otaInProgress = false;
-    setOtaMaintenanceMode(false);
-    errorMessage = "Update.end failed: " + String(Update.errorString());
-    otaLastError = errorMessage;
-    return false;
-  }
-
-  http.end();
-  unlockHttpOperation();
-  otaInProgress = false;
-  otaLastOk = true;
-  otaLastError = "";
-  otaFinishedMs = millis();
-  otaAwaitingValidation = true;
-  otaValidationDone = false;
-  otaBootValidateAfterMs = millis() + 30000UL;
-  otaLastVersion = String(FW_NAME) + "/" + FW_VERSION;
-  prefs.putBool("ota_last_ok", true);
-  prefs.putString("ota_last_url", otaLastUrl);
-  prefs.putString("ota_last_ver", otaLastVersion);
-  prefs.putULong("ota_last_ms", otaFinishedMs);
-
-  JsonDocument ok;
-  ok["type"] = "ota_downloaded";
-  ok["uptime_ms"] = millis() - bootMs;
-  ok["written_bytes"] = written;
-  ok["content_length"] = contentLength;
-  ok["rebooting"] = true;
-  ok["safety"] = "boot_pending_verify_then_mark_valid_or_rollback";
-  printJson(ok);
-  return true;
-}
-
-static void maybeValidateOtaBoot() {
-  if (!otaAwaitingValidation || otaValidationDone) return;
-  unsigned long now = millis();
-  if ((long)(now - otaBootValidateAfterMs) < 0) return;
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  esp_err_t err = esp_ota_mark_app_valid_cancel_rollback();
-  JsonDocument doc;
-  doc["type"] = "ota_boot_validation";
-  doc["uptime_ms"] = millis() - bootMs;
-  doc["result"] = err == ESP_OK ? "valid" : "failed";
-  doc["esp_err"] = (int)err;
-  printJson(doc);
-
-  otaValidationDone = err == ESP_OK;
-  otaAwaitingValidation = err != ESP_OK;
-  if (err == ESP_OK) {
-    prefs.putBool("ota_boot_validated", true);
-    prefs.putULong("ota_boot_validated_ms", millis());
-  }
 }
 
 static bool isAllowedLanCommand(const String& line) {
@@ -1612,26 +1358,19 @@ static void setBleConnectionEnabled(bool enabled, const char* reason) {
   }
 }
 
-static bool wifiReadyForStatus() {
-  wifi_mode_t mode = WiFi.getMode();
-  return mode == WIFI_MODE_STA || mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA;
-}
-
 static void emitConfig(const char* type) {
   JsonDocument doc;
-  bool wifiReady = wifiReadyForStatus();
-  bool wifiConnected = wifiReady && WiFi.status() == WL_CONNECTED;
   doc["type"] = type;
   doc["fw"] = FW_NAME;
   doc["version"] = FW_VERSION;
   doc["uptime_ms"] = millis() - bootMs;
   doc["production_enabled"] = productionEnabled;
   doc["wifi_configured"] = wifiSsid.length() > 0;
-  doc["wifi_connected"] = wifiConnected;
+  doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
   doc["wifi_ssid"] = wifiSsid.length() > 0 ? wifiSsid : "";
-  doc["ip"] = wifiConnected ? WiFi.localIP().toString() : "";
+  doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "";
   doc["local_hostname"] = localHostname;
-  doc["local_url"] = wifiConnected ? localPortalUrl() : "";
+  doc["local_url"] = WiFi.status() == WL_CONNECTED ? localPortalUrl() : "";
   doc["api_url"] = apiUrl;
   doc["api_token_configured"] = apiToken.length() > 0;
   doc["device_id"] = deviceId;
@@ -1664,8 +1403,6 @@ static void emitConfig(const char* type) {
 
 static void emitStatus(const char* type) {
   JsonDocument doc;
-  bool wifiReady = wifiReadyForStatus();
-  bool wifiConnected = wifiReady && WiFi.status() == WL_CONNECTED;
   doc["type"] = type;
   doc["fw"] = FW_NAME;
   doc["version"] = FW_VERSION;
@@ -1684,10 +1421,10 @@ static void emitStatus(const char* type) {
   doc["device_id_name_hint"] = deviceId;
   doc["known_lumentree_service_uuid"] = KNOWN_LUMENTREE_SERVICE_UUID;
   doc["wifi_mode"] = productionEnabled ? "production_upload" : "manual";
-  doc["wifi_connected"] = wifiConnected;
-  doc["ip"] = wifiConnected ? WiFi.localIP().toString() : "";
+  doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
+  doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "";
   doc["local_hostname"] = localHostname;
-  doc["local_url"] = wifiConnected ? localPortalUrl() : "";
+  doc["local_url"] = WiFi.status() == WL_CONNECTED ? localPortalUrl() : "";
   doc["api_url"] = apiUrl;
   doc["api_token_configured"] = apiToken.length() > 0;
   doc["device_id"] = deviceId;
@@ -1765,7 +1502,7 @@ static String localPortalUrl() {
 }
 
 static void ensureMdnsStarted() {
-  if (!wifiReadyForStatus() || WiFi.status() != WL_CONNECTED || localHostname.length() == 0) return;
+  if (WiFi.status() != WL_CONNECTED || localHostname.length() == 0) return;
   if (mdnsStarted) return;
   if (!MDNS.begin(localHostname.c_str())) {
     emitError("mdns_start_failed", "could not start mDNS responder");
@@ -1947,18 +1684,6 @@ static void setupProvisioningWebServer() {
     doc["command_poll_task_enabled"] = commandPollTaskEnabled;
     doc["ble_connection_enabled"] = bleConnectionEnabled;
     doc["ble_session_connected"] = modbusClient != nullptr && modbusClient->isConnected() && modbusCharacteristic != nullptr;
-    doc["ota_supported"] = otaSupported();
-    doc["ota_in_progress"] = otaInProgress;
-    doc["ota_maintenance_mode"] = otaMaintenanceMode;
-    doc["ota_last_ok"] = otaLastOk;
-    doc["ota_last_error"] = otaLastError;
-    doc["ota_last_url"] = otaLastUrl;
-    doc["ota_last_version"] = otaLastVersion;
-    doc["ota_last_written_bytes"] = otaLastWrittenBytes;
-    doc["ota_started_ms"] = otaStartedMs;
-    doc["ota_finished_ms"] = otaFinishedMs;
-    doc["ota_awaiting_validation"] = otaAwaitingValidation;
-    doc["ota_validation_done"] = otaValidationDone;
     JsonArray runtimeProbesJson = doc["runtime_probes"].to<JsonArray>();
     addRuntimeProbeJson(runtimeProbesJson);
     JsonArray runtimeTraceJson = doc["runtime_trace"].to<JsonArray>();
@@ -1971,103 +1696,10 @@ static void setupProvisioningWebServer() {
   server.on("/api/logs", HTTP_GET, []() {
     JsonDocument doc;
     doc["ok"] = true;
-    size_t limit = 100;
-    if (server.hasArg("limit")) {
-      int requested = server.arg("limit").toInt();
-      if (requested > 0) limit = (size_t)requested;
-    }
-    if (limit > runtimeLogCount) limit = runtimeLogCount;
-    JsonArray logs = doc["logs"].to<JsonArray>();
-    for (size_t i = 0; i < limit; i++) {
-      size_t offsetFromNewest = limit - 1 - i;
-      size_t idx = (runtimeLogNextIndex + RUNTIME_LOG_BUFFER_SIZE - 1 - offsetFromNewest) % RUNTIME_LOG_BUFFER_SIZE;
-      logs.add(runtimeLogBuffer[idx]);
-    }
-    doc["count"] = runtimeLogCount;
-    doc["limit"] = limit;
+    doc["logs"].to<JsonArray>();
     String body;
     serializeJson(doc, body);
     server.send(200, "application/json", body);
-  });
-
-  server.on("/api/ota_status", HTTP_GET, []() {
-    JsonDocument doc;
-    doc["ok"] = true;
-    doc["ota_supported"] = otaSupported();
-    doc["ota_in_progress"] = otaInProgress;
-    doc["ota_maintenance_mode"] = otaMaintenanceMode;
-    doc["ota_last_ok"] = otaLastOk;
-    doc["ota_last_error"] = otaLastError;
-    doc["ota_last_url"] = otaLastUrl;
-    doc["ota_last_version"] = otaLastVersion;
-    doc["ota_last_written_bytes"] = otaLastWrittenBytes;
-    doc["ota_started_ms"] = otaStartedMs;
-    doc["ota_finished_ms"] = otaFinishedMs;
-    doc["ota_awaiting_validation"] = otaAwaitingValidation;
-    doc["ota_validation_done"] = otaValidationDone;
-    String body;
-    serializeJson(doc, body);
-    server.send(200, "application/json", body);
-  });
-
-  server.on("/api/ota", HTTP_POST, []() {
-    if (!otaSupported()) {
-      server.send(400, "application/json", "{\"ok\":false,\"error\":\"ota_not_supported_on_current_partition_layout\"}");
-      return;
-    }
-    if (otaInProgress) {
-      server.send(409, "application/json", "{\"ok\":false,\"error\":\"ota_already_in_progress\"}");
-      return;
-    }
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, server.arg("plain"));
-    if (error) {
-      server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid json\"}");
-      return;
-    }
-    String url = doc["url"] | "";
-    String md5 = doc["md5"] | "";
-    url.trim();
-    md5.trim();
-    String otaError;
-    bool ok = performOtaFromUrl(url, md5, otaError);
-    if (!ok) {
-      JsonDocument result;
-      result["ok"] = false;
-      result["error"] = otaError;
-      String body;
-      serializeJson(result, body);
-      server.send(502, "application/json", body);
-      return;
-    }
-    JsonDocument result;
-    result["ok"] = true;
-    result["rebooting"] = true;
-    result["ota_last_url"] = otaLastUrl;
-    result["ota_written_bytes"] = otaLastWrittenBytes;
-    result["safety"] = "pending_verify_boot_gate_with_auto_rollback";
-    String body;
-    serializeJson(result, body);
-    server.send(200, "application/json", body);
-    delay(400);
-    ESP.restart();
-  });
-
-  server.on("/api/ota/rollback", HTTP_POST, []() {
-    const esp_partition_t* running = esp_ota_get_running_partition();
-    esp_ota_img_states_t state = ESP_OTA_IMG_UNDEFINED;
-    if (running == nullptr || esp_ota_get_state_partition(running, &state) != ESP_OK || state != ESP_OTA_IMG_PENDING_VERIFY) {
-      server.send(400, "application/json", "{\"ok\":false,\"error\":\"rollback_only_available_while_pending_verify\"}");
-      return;
-    }
-    esp_err_t err = esp_ota_mark_app_invalid_rollback_and_reboot();
-    JsonDocument result;
-    result["ok"] = err == ESP_OK;
-    result["esp_err"] = (int)err;
-    result["rebooting"] = err == ESP_OK;
-    String body;
-    serializeJson(result, body);
-    server.send(err == ESP_OK ? 200 : 500, "application/json", body);
   });
 
   server.on("/api/command", HTTP_POST, []() {
@@ -3920,10 +3552,6 @@ static const char* commandResultStatusForOutcome(bool ok, JsonDocument& result) 
 
 static void pollPendingCommand() {
   uint32_t probeStartedMs = beginRuntimeProbe(PROBE_COMMAND_POLL);
-  if (otaInProgress || otaMaintenanceMode) {
-    finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
-    return;
-  }
   if (commandPollingDisabled) {
     finishRuntimeProbe(PROBE_COMMAND_POLL, probeStartedMs, true);
     return;
@@ -5027,10 +4655,6 @@ static void runWifiScan() {
 
 static void maybeRunTelemetryScheduler() {
   uint32_t probeStartedMs = beginRuntimeProbe(PROBE_TELEMETRY_SCHEDULER);
-  if (otaInProgress || otaMaintenanceMode) {
-    finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
-    return;
-  }
   if (!productionEnabled) {
     finishRuntimeProbe(PROBE_TELEMETRY_SCHEDULER, probeStartedMs, true);
     return;
@@ -5209,17 +4833,15 @@ static void maybeEmitHeartbeat() {
   lastHeartbeatMs = now;
 
   JsonDocument doc;
-  bool wifiReady = wifiReadyForStatus();
-  bool wifiConnected = wifiReady && WiFi.status() == WL_CONNECTED;
   doc["type"] = "heartbeat";
   doc["fw"] = FW_NAME;
   doc["version"] = FW_VERSION;
   doc["uptime_ms"] = now - bootMs;
   doc["production_enabled"] = productionEnabled;
-  doc["wifi_connected"] = wifiConnected;
+  doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
   doc["wifi_ssid"] = wifiSsid;
-  doc["ip"] = wifiConnected ? WiFi.localIP().toString() : "";
-  doc["rssi"] = wifiConnected ? WiFi.RSSI() : 0;
+  doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "";
+  doc["rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
   doc["gateway_id"] = gatewayId;
   doc["target_mac"] = targetMac;
   doc["pairing_status"] = pairingStatus;
@@ -5414,29 +5036,11 @@ void setup() {
   httpOperationMutex = xSemaphoreCreateMutex();
 
   loadConfig();
-  otaLastOk = prefs.getBool("ota_last_ok", false);
-  otaLastUrl = prefs.getString("ota_last_url", "");
-  otaLastVersion = prefs.getString("ota_last_ver", "");
-  otaFinishedMs = prefs.getULong("ota_last_ms", 0);
-  otaValidationDone = prefs.getBool("ota_boot_validated", false);
-  const esp_partition_t* runningPartition = esp_ota_get_running_partition();
-  esp_ota_img_states_t runningState = ESP_OTA_IMG_UNDEFINED;
-  if (runningPartition != nullptr && esp_ota_get_state_partition(runningPartition, &runningState) == ESP_OK) {
-    if (runningState == ESP_OTA_IMG_PENDING_VERIFY) {
-      otaAwaitingValidation = true;
-      otaValidationDone = false;
-      otaBootValidateAfterMs = millis() + 30000UL;
-      JsonDocument otaBoot;
-      otaBoot["type"] = "ota_boot_pending_verify";
-      otaBoot["uptime_ms"] = 0;
-      otaBoot["safety"] = "awaiting_health_gate_before_mark_valid";
-      printJson(otaBoot);
-    }
-  }
-  WiFi.mode(WIFI_STA);
-  esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
-  if (!productionEnabled) {
-    WiFi.disconnect(true);
+  if (productionEnabled) {
+    WiFi.mode(WIFI_STA);
+    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+  } else {
+    WiFi.mode(WIFI_OFF);
   }
   delay(100);
 
@@ -5490,7 +5094,6 @@ void loop() {
   if (!telemetryTaskEnabled) {
     maybeRunTelemetryScheduler();
   }
-  maybeValidateOtaBoot();
   maybeEmitHeartbeat();
   feedWatchdog();
   delay(10);
