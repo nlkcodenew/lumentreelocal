@@ -94,6 +94,9 @@
 #ifndef LUMENTREE_FIRMWARE_VERSION
 #define LUMENTREE_FIRMWARE_VERSION "0.0.0-dev"
 #endif
+#ifndef LUMENTREE_COMMAND_POLL_INTERVAL_MS
+#define LUMENTREE_COMMAND_POLL_INTERVAL_MS 10000UL
+#endif
 
 static const char* FW_NAME = LUMENTREE_FIRMWARE_NAME;
 static const char* FW_VERSION = LUMENTREE_FIRMWARE_VERSION;
@@ -113,7 +116,7 @@ static const uint32_t WATCHDOG_TIMEOUT_SECONDS = 60;
 static const unsigned long HEARTBEAT_INTERVAL_MS = 300000;
 static const unsigned long HTTP_STARTUP_QUIET_MS = 30000;
 static const unsigned long AUTO_DISCOVERY_RETRY_MS = 60000;
-static const unsigned long COMMAND_POLL_INTERVAL_MS = 10000;
+static const unsigned long COMMAND_POLL_INTERVAL_MS = LUMENTREE_COMMAND_POLL_INTERVAL_MS;
 static const unsigned long FAST_TELEMETRY_INTERVAL_MS = 5000;
 static const unsigned long TELEMETRY_UPLOAD_RETRY_BACKOFF_MS = 2000;
 static const unsigned long HTTPS_MIN_GAP_MS = 2500;
@@ -184,6 +187,7 @@ static unsigned long nextMainFullRefreshMs = 0;
 static unsigned long lastHttpsAttemptMs = 0;
 static unsigned long lastBleTelemetryActionMs = 0;
 static unsigned long telemetryResumeAfterWriteMs = 0;
+static bool forceMainFullRefresh = true;
 static uint16_t nextMainTelemetryStartRegister = 0;
 static volatile bool modbusNotifyReceived = false;
 static volatile unsigned long modbusLastNotifyMs = 0;
@@ -1116,9 +1120,7 @@ static bool runFastMainCacheScheduler(unsigned long now) {
     nextUploadMs = millis() + telemetryIntervalMs();
     return true;
   }
-  bool fullRefreshDue = !mainTelemetryCache.valid
-    || nextMainFullRefreshMs == 0
-    || (long)(now - nextMainFullRefreshMs) >= 0;
+  bool fullRefreshDue = forceMainFullRefresh || !mainTelemetryCache.valid;
 
   if (fullRefreshDue) {
     JsonDocument plan;
@@ -1134,11 +1136,13 @@ static bool runFastMainCacheScheduler(unsigned long now) {
     if (ok) {
       markBleTelemetryAction(millis());
       updateMainTelemetrySnapshotFromCache("function_03_read_only_full_cache_refresh");
-      nextMainFullRefreshMs = millis() + MAIN_FULL_REFRESH_INTERVAL_MS;
+      forceMainFullRefresh = false;
+      nextMainFullRefreshMs = millis();
       nextUploadMs = millis() + telemetryIntervalMs();
     } else {
       emitError("main_cache_refresh_failed", "could not refresh full main telemetry cache");
-      nextMainFullRefreshMs = millis() + telemetryIntervalMs();
+      forceMainFullRefresh = true;
+      nextMainFullRefreshMs = millis();
       if (mainTelemetryCache.valid) {
         markTelemetrySnapshotDirty(latestMainTelemetry);
       }
@@ -1385,6 +1389,7 @@ static void emitConfig(const char* type) {
   doc["main_telemetry_cache_valid_registers"] = mainTelemetryCache.validCount;
   doc["main_full_refresh_interval_ms"] = MAIN_FULL_REFRESH_INTERVAL_MS;
   doc["settings_poll_interval_ms"] = SETTINGS_UPLOAD_INTERVAL_MS;
+  doc["command_poll_interval_ms"] = COMMAND_POLL_INTERVAL_MS;
   doc["command_polling_disabled"] = commandPollingDisabled;
   doc["command_poll_task_enabled"] = commandPollTaskEnabled;
   doc["provisioning_portal_active"] = provisioningPortalActive;
@@ -1435,6 +1440,7 @@ static void emitStatus(const char* type) {
   doc["main_telemetry_cache_valid_registers"] = mainTelemetryCache.validCount;
   doc["main_full_refresh_interval_ms"] = MAIN_FULL_REFRESH_INTERVAL_MS;
   doc["settings_poll_interval_ms"] = SETTINGS_UPLOAD_INTERVAL_MS;
+  doc["command_poll_interval_ms"] = COMMAND_POLL_INTERVAL_MS;
   doc["command_polling_disabled"] = commandPollingDisabled;
   doc["command_poll_task_enabled"] = commandPollTaskEnabled;
   doc["provisioning_portal_active"] = provisioningPortalActive;
@@ -1673,6 +1679,7 @@ static void setupProvisioningWebServer() {
     doc["main_telemetry_cache_valid_registers"] = mainTelemetryCache.validCount;
     doc["main_full_refresh_interval_ms"] = MAIN_FULL_REFRESH_INTERVAL_MS;
     doc["settings_poll_interval_ms"] = SETTINGS_UPLOAD_INTERVAL_MS;
+    doc["command_poll_interval_ms"] = COMMAND_POLL_INTERVAL_MS;
     doc["command_polling_disabled"] = commandPollingDisabled;
     doc["command_poll_task_enabled"] = commandPollTaskEnabled;
     doc["ble_connection_enabled"] = bleConnectionEnabled;
@@ -2708,6 +2715,7 @@ static void maybeAccelerateAfterWriteCommand(const char* status, JsonDocument& r
   }
   telemetryResumeAfterWriteMs = millis() + WRITE_LANE_RESUME_DELAY_MS;
   if (strcmp(status, "completed") == 0) {
+    forceMainFullRefresh = true;
     uploadSettingsSnapshotNow("post_write_command_completed");
     nextSettingsPollMs = millis() + SETTINGS_UPLOAD_INTERVAL_MS;
   }
@@ -4695,9 +4703,7 @@ static void maybeRunTelemetryScheduler() {
   bool settingsDue = (long)(now - nextSettingsPollMs) >= 0;
   bool statsDue = (long)(now - nextStatsPollMs) >= 0;
   bool fastDue = (long)(now - nextUploadMs) >= 0;
-  bool fullRefreshDue = !mainTelemetryCache.valid
-    || nextMainFullRefreshMs == 0
-    || (long)(now - nextMainFullRefreshMs) >= 0;
+  bool fullRefreshDue = forceMainFullRefresh || !mainTelemetryCache.valid;
 
   if (settingsDue && bleTelemetryGapReady(now)) {
     JsonDocument plan;
