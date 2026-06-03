@@ -136,6 +136,18 @@
 - Timing knobs are now env-driven for this line (do not re-hardcode fixed
   timing values in firmware).
 
+## USB Port Mapping Rule (Verified 2026-06-01)
+
+- Do not guess USB port by memory; verify before every flash.
+- Verified on this host at `2026-06-01`:
+  - `/dev/ttyACM0` = `ESP32-C3` (MAC `9c:cc:01:c0:a3:38`)
+  - `/dev/ttyACM1` = `ESP32-S3` (MAC `3c:dc:75:63:47:5c`)
+- Safe pre-flash check command:
+  - `python -m esptool --port /dev/ttyACM0 chip-id`
+  - `python -m esptool --port /dev/ttyACM1 chip-id`
+- Flash must only proceed after the detected chip type matches the intended
+  firmware env (`esp32-c3-*` vs `esp32-s3-*`).
+
 ## SSE Push Baseline (Server -> HA)
 
 - Local server now supports SSE telemetry stream:
