@@ -9,14 +9,20 @@ One standard operational procedure for:
 3. updating the Home Assistant `lumentreelocal` integration,
 4. restarting Home Assistant only when it is actually needed.
 
-This runbook reflects the current production path verified on 2026-05-20.
+This runbook reflects the standard production path first verified on
+2026-05-20, with current safety notes updated through 2026-06-01 where later
+operational rules changed.
 
 ## Scope
 
 - Repo root: `/home/mrlinh/esp32-lumentree`
-- ESP32 serial path used in current validation: `/dev/ttyACM0`
+- Historical S3 validation in this document originally used `/dev/ttyACM0`
+- Current verified host USB mapping:
+  - `/dev/ttyACM0` = `ESP32-C3`
+  - `/dev/ttyACM1` = `ESP32-S3`
 - Production API: `https://lumentree.jonah.io.vn`
-- Local API bind: `127.0.0.1:8787`
+- Local API origin on host: `http://127.0.0.1:8787`
+- HAOS VM local-origin route: `http://192.168.122.1:8787`
 - Home Assistant integration domain: `lumentreelocal`
 
 ## Preconditions
@@ -65,14 +71,15 @@ pio run -e esp32-s3-8mb-nopsram-release --project-conf platformio.ini
 
 ```bash
 cd /home/mrlinh/esp32-lumentree/firmware
-pio run -e esp32-s3-8mb-nopsram-release --project-conf platformio.ini -t upload --upload-port /dev/ttyACM0
+python -m esptool --port /dev/ttyACM1 chip-id
+pio run -e esp32-s3-8mb-nopsram-release --project-conf platformio.ini -t upload --upload-port /dev/ttyACM1
 ```
 
 ### 3. Verify Serial Boot
 
 ```bash
 cd /home/mrlinh/esp32-lumentree
-python3 -m serial.tools.miniterm /dev/ttyACM0 115200
+python3 -m serial.tools.miniterm /dev/ttyACM1 115200
 ```
 
 Minimum checks after boot:
@@ -323,6 +330,7 @@ Then confirm the new PID is up and health passes:
 ```bash
 ps -eo pid,cmd | rg '/host/local-server/server.py --init-db'
 curl -sS http://127.0.0.1:8787/health
+curl -sS http://192.168.122.1:8787/health
 ```
 
 ## Current Verified Outcome

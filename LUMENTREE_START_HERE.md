@@ -27,7 +27,7 @@ Private runtime checkout:
 ```text
 /home/mrlinh/esp32-lumentree
 branch = local-only
-push = private/main
+push remote = private
 repo = https://github.com/nlkcodenew/lumentreelocal-private
 ```
 
@@ -69,11 +69,15 @@ After choosing a checkout, immediately read:
   - S3 poll3s env-driven telemetry timing
   - server SSE stream endpoint
   - HA SSE listener with polling fallback
+- Current host safety notes also include:
+  - verified USB mapping rule from `AGENTS.md`
+  - HA local-origin route for HAOS VM:
+    `http://192.168.122.1:8787`
 - Final session report:
   - `/home/mrlinh/esp32-lumentree/docs/status/2026-05-31-s3-sse-rollout-and-stability-final.md`
 - Final S3 firmware bin from this session:
   - `/home/mrlinh/esp32-lumentree/firmware/bin/s3/lumentree-s3-poll3s-sse-envdriven-a180f64.bin`
 - First checks for next session:
   1. `curl http://127.0.0.1:8787/health`
-  2. `curl http://192.168.1.151/api/status`
+  2. verify the current board IP from HA/router, then check `http://<board-ip>/api/status`
   3. verify HA integration against local server origin (not Cloudflare path)

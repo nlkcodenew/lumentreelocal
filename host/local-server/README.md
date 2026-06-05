@@ -2,7 +2,7 @@
 
 This service is the production replacement for the Lumentree vendor-cloud role.
 
-It accepts telemetry from a future ESP32-S3 BLE/Wi-Fi gateway, stores events in
+It accepts telemetry from the active ESP32 gateway runtime, stores events in
 Postgres, and exposes a small HTTP API for the `lumentreelocal` Home Assistant
 custom integration.
 
@@ -39,11 +39,21 @@ openssl rand -hex 32
 ## Run
 
 ```bash
-python server.py --init-db --host 127.0.0.1 --port 8787
+python server.py --init-db --host 0.0.0.0 --port 8787
 ```
 
-The server should stay bound to `127.0.0.1` behind Cloudflare Tunnel. Do not
-expose the raw port directly to the network.
+For the current single-host + HAOS VM setup, the server must be reachable from:
+
+- the Ubuntu host itself on `127.0.0.1:8787`
+- the HAOS VM through `192.168.122.1:8787`
+
+Operational rule:
+
+- bind the local server on `0.0.0.0`
+- keep bearer-token auth enabled on the API
+- use Cloudflare only for remote browser access
+- keep Home Assistant on the VM-reachable local origin instead of the public
+  hostname whenever the local path is available
 
 Cloudflare Tunnel ingress:
 
@@ -52,10 +62,19 @@ Cloudflare Tunnel ingress:
   service: http://127.0.0.1:8787
 ```
 
+This ingress stays valid because the tunnel client runs on the same Ubuntu host.
+
 ## Test Production Route
 
 ```bash
 curl https://lumentree.jonah.io.vn/health
+```
+
+Test the local paths too:
+
+```bash
+curl http://127.0.0.1:8787/health
+curl http://192.168.122.1:8787/health
 ```
 
 Post a sample event:
@@ -85,8 +104,8 @@ curl -H "Authorization: Bearer $LUMENTREE_API_TOKEN" \
 
 ## Write Authorization
 
-Read-only endpoints are available without a Home Assistant token. Command
-creation requires either the server token or a scoped write grant.
+Normal device reads now require either the server token or a scoped read grant.
+Command creation requires either the server token or a scoped write grant.
 
 The intended user flow is:
 
@@ -95,9 +114,13 @@ The intended user flow is:
 2. ESP32 registers the code with
    `/api/lumentree/gateways/{gateway_id}/write-pairing-code` using the server
    token.
-3. Home Assistant claims a scoped write grant through
+3. Home Assistant claims a scoped read grant through
+   `/api/lumentree/devices/{device_id}/read-grants/claim`.
+4. Home Assistant claims a scoped write grant through
    `/api/lumentree/devices/{device_id}/write-grants/claim`.
-4. Home Assistant uses that grant for `POST /api/lumentree/commands`.
+5. Home Assistant uses the read grant for `GET /latest`, `GET /health`, and
+   the SSE stream when it is not configured with the server token.
+6. Home Assistant uses the write grant for `POST /api/lumentree/commands`.
 
 The server stores only hashes for pairing codes and grant tokens. Write commands
 are allow-listed semantic commands only: target SOC, discharge slot enable,

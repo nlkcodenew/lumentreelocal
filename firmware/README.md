@@ -7,9 +7,11 @@ uploads telemetry to the local production API.
 
 Use these first:
 
-1. `../docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
-2. `../START_HERE.md`
-3. `../SESSION_HANDOFF.md`
+1. `../START_HERE.md`
+2. `../AGENTS.md`
+3. `../docs/status/2026-05-31-s3-sse-rollout-and-stability-final.md`
+4. `../docs/status/2026-05-20-standard-firmware-flash-ha-update-runbook.md`
+5. `../SESSION_HANDOFF.md`
 
 ## Release Baseline
 
@@ -125,21 +127,23 @@ Build C3 experimental poll-5s line:
 
 ```bash
 cd /home/mrlinh/esp32-lumentree/firmware
-pio run -e esp32-c3-4mb-fastbulk-task-poll5s --project-conf platformio.ini
+pio run -e esp32-c3-4mb-debug-cmdtask-fastbulk-task --project-conf platformio.ini
 ```
 
 ## Flash
 
 ```bash
 cd /home/mrlinh/esp32-lumentree/firmware
-pio run -e esp32-s3-8mb-nopsram-release --project-conf platformio.ini -t upload --upload-port /dev/ttyACM0
+python -m esptool --port /dev/ttyACM1 chip-id
+pio run -e esp32-s3-8mb-nopsram-release --project-conf platformio.ini -t upload --upload-port /dev/ttyACM1
 ```
 
 Flash C3 experimental poll-5s:
 
 ```bash
 cd /home/mrlinh/esp32-lumentree/firmware
-pio run -e esp32-c3-4mb-fastbulk-task-poll5s --project-conf platformio.ini -t upload --upload-port /dev/ttyACM0
+python -m esptool --port /dev/ttyACM0 chip-id
+pio run -e esp32-c3-4mb-debug-cmdtask-fastbulk-task --project-conf platformio.ini -t upload --upload-port /dev/ttyACM0
 ```
 
 ## Bin Output Layout
@@ -197,6 +201,8 @@ GENERATE_WRITE_CODE
 
 - Captive portal default: `http://192.168.4.1`
 - Production API default: `https://lumentree.jonah.io.vn`
+- Home Assistant internal polling should prefer `http://192.168.122.1:8787`
+  over the public Cloudflare hostname when running on the local HAOS VM.
 - Firmware build flags in `platformio.ini` are the source of truth for the
   reported firmware name/version.
 - Normal production telemetry now prefers a persistent BLE session instead of a

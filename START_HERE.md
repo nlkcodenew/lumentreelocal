@@ -1,6 +1,7 @@
 # START HERE: Private Runtime Repo
 
-Repo này dùng để sửa và vận hành runtime local (firmware + host + docs nội bộ).
+Repo này dùng để sửa và vận hành runtime local
+(`firmware + host + HA runtime + docs nội bộ`).
 
 ## Cấu trúc chuẩn
 
@@ -22,6 +23,14 @@ Luồng chuẩn là:
 
 ## Lệnh chuẩn
 
+Check baseline trước khi sửa:
+
+```bash
+git -C /home/mrlinh/esp32-lumentree whereami
+curl http://127.0.0.1:8787/health
+curl http://192.168.122.1:8787/health
+```
+
 Build S3 poll-3s:
 
 ```bash
@@ -31,7 +40,21 @@ platformio run -d /home/mrlinh/esp32-lumentree/firmware -e esp32-s3-8mb-fastbulk
 Flash S3 poll-3s:
 
 ```bash
-platformio run -d /home/mrlinh/esp32-lumentree/firmware -e esp32-s3-8mb-fastbulk-task-poll3s -t upload --upload-port /dev/ttyACM0
+python -m esptool --port /dev/ttyACM1 chip-id
+platformio run -d /home/mrlinh/esp32-lumentree/firmware -e esp32-s3-8mb-fastbulk-task-poll3s -t upload --upload-port /dev/ttyACM1
+```
+
+Build current C3 experimental runtime line:
+
+```bash
+platformio run -d /home/mrlinh/esp32-lumentree/firmware -e esp32-c3-4mb-debug-cmdtask-fastbulk-task
+```
+
+Flash current C3 experimental runtime line:
+
+```bash
+python -m esptool --port /dev/ttyACM0 chip-id
+platformio run -d /home/mrlinh/esp32-lumentree/firmware -e esp32-c3-4mb-debug-cmdtask-fastbulk-task -t upload --upload-port /dev/ttyACM0
 ```
 
 Xem cổng serial:
@@ -45,7 +68,14 @@ platformio device list
 - `esp32-s3-8mb-fastbulk-task-poll3s`: S3 test line poll 3s
 - `esp32-s3-8mb-fastbulk-task-poll5s`: S3 test line poll 5s
 - `esp32-s3-8mb-fastbulk-task-poll7s`: S3 test line poll 7s
-- `esp32-c3-4mb-experimental`: C3 experimental line
+- `esp32-c3-4mb-experimental`: C3 baseline experimental line
+- `esp32-c3-4mb-debug-cmdtask-fastbulk-task`: C3 current debug/runtime line
+
+## USB mapping đã xác minh
+
+- `/dev/ttyACM0` = `ESP32-C3`
+- `/dev/ttyACM1` = `ESP32-S3`
+- Không flash theo trí nhớ. Luôn chạy `esptool ... chip-id` trước.
 
 ## Quy ước repo
 
@@ -62,3 +92,6 @@ platformio device list
   - `firmware/bin/s3/lumentree-s3-poll3s-sse-envdriven-a180f64.bin`
 - Báo cáo session:
   - `docs/status/2026-05-31-s3-sse-rollout-and-stability-final.md`
+- HA nội bộ phải đi local origin:
+  - `HAOS VM -> http://192.168.122.1:8787`
+  - không dùng Cloudflare URL cho polling nội bộ nếu local origin còn sống
